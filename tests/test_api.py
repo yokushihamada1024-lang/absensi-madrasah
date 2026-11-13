@@ -70,7 +70,7 @@ def test_full_flow(env):
     scan = r.json()
     assert scan["status_preview"] == "on_time" and scan["distance_m"] < 1
     qr = client.get(f"/api/admin/sessions/{s['session_id']}/qr", headers=ha).json()
-    assert qr["svg"].startswith("<svg") and qr["rotate_sec"] == 30
+    assert qr["svg"].startswith('<svg xmlns="http://www.w3.org/2000/svg"') and qr["rotate_sec"] == 30
     r = client.post("/api/attendance/submit", headers=hg, json={"ticket": scan["ticket"], "kelas": "Umar",
                                                                 "mapel": "Fikih"})
     assert r.status_code == 200 and r.json()["kelas"] == "Umar"

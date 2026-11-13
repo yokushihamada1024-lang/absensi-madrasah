@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin Absensi Madrasah</title>
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/leaflet/leaflet.js" defer></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="slow-banner" class="banner banner-slow" hidden role="status">
+    <span class="spinner" aria-hidden="true"></span> Menghubungkan ke server… (bisa sampai 1 menit)
+  </div>
+  <div id="layout" class="layout">
+    <nav id="nav" class="nav" hidden>
+      <div class="brand" id="brand">Admin Absensi</div>
+      <a href="#/dashboard" data-route="/dashboard">Dashboard Hari Ini</a>
+      <a href="#/sesi" data-route="/sesi">Sesi &amp; QR</a>
+      <a href="#/guru" data-route="/guru">Guru</a>
+      <a href="#/absensi" data-route="/absensi">Absensi</a>
+      <a href="#/penggajian" data-route="/penggajian">Penggajian</a>
+      <a href="#/pengaturan" data-route="/pengaturan">Pengaturan</a>
+      <a href="#/log" data-route="/log">Log</a>
+      <div class="nav-foot">
+        <div id="who" class="muted small"></div>
+        <button id="logout" class="btn btn-ghost btn-sm" type="button">Keluar</button>
+      </div>
+    </nav>
+    <main id="app" class="content" aria-live="polite"><p class="muted">Memuat…</p></main>
+  </div>
+  <dialog id="dialog" class="dialog"></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import uuid
 from datetime import date
 
@@ -62,7 +63,11 @@ def close_session(session_id: str, admin: User = Depends(require_admin), c: AppC
 @router.get("/sessions/{session_id}/qr")
 def session_qr(session_id: str, c: AppContext = Depends(ctx)) -> dict:
     q = c.svc.qr(session_id)
-    svg = segno.make_qr(q.token, error="m").svg_inline(scale=10, border=2, dark="#000", light="#fff")
+    buf = io.BytesIO()
+    # SVG mandiri (dengan xmlns) agar bisa ditampilkan lewat Blob + <img> di admin.
+    segno.make_qr(q.token, error="m").save(buf, kind="svg", scale=10, border=2, dark="#000", light="#fff",
+                                          xmldecl=False, svgns=True, nl=False)
+    svg = buf.getvalue().decode("utf-8")
     return {
         "token": q.token,
         "svg": svg,
