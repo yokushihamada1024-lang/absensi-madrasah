@@ -7,7 +7,7 @@ import uuid
 from datetime import date
 
 import segno
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from api.auth import ctx, require_admin
 from api.schemas import (
@@ -27,7 +27,7 @@ from api.schemas import (
     user_out,
 )
 from api.state import AppContext
-from core import audit, payroll
+from core import audit, payroll, slip
 from core.models import AppError, NamedItem, Rate, SessionDef, Settings, User
 from core.repo.base import AttendanceFilter
 from core.security import hash_pin
@@ -338,6 +338,29 @@ def get_payroll(period: str | None = None, c: AppContext = Depends(ctx)) -> dict
         "total_meetings": sum(ln.meetings for ln in lines),
         "total_take_home": sum(ln.take_home for ln in lines),
     }
+
+
+def _pdf_headers(filename: str) -> dict[str, str]:
+    return {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+
+@router.get("/payroll/{period}/{user_id}/slip.pdf")
+def slip_pdf(period: str, user_id: str, c: AppContext = Depends(ctx)) -> Response:
+    p = _period(period)
+    user = _guru_or_404(c, user_id)
+    if user.role != "guru":
+        raise AppError("NOT_GURU", "Slip hanya untuk guru.", 422)
+    line = payroll.compute_line(c.repo, p, user, today=wib_date(c.clock()))
+    pdf = slip.build_slip_pdf(line, c.repo.settings.get().madrasah_name, _names(c), c.clock())
+    return Response(pdf, media_type="application/pdf", headers=_pdf_headers(slip.slip_filename(line)))
+
+
+@router.get("/payroll/{period}/slips.zip")
+def slips_zip(period: str, c: AppContext = Depends(ctx)) -> Response:
+    p = _period(period)
+    lines = payroll.compute_period(c.repo, p, today=wib_date(c.clock()))
+    data = slip.build_slips_zip(lines, c.repo.settings.get().madrasah_name, _names(c), c.clock())
+    return Response(data, media_type="application/zip", headers=_pdf_headers(f"slip-gaji-{p}.zip"))
 
 
 @router.post("/payroll/{period}/{user_id}/finalize")
