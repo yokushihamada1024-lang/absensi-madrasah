@@ -113,6 +113,7 @@ class SettingsIn(Strict):
     grace_min: int = Field(ge=0, le=180)
     early_open_min: int = Field(ge=0, le=180)
     allow_button_checkin: bool = False
+    auto_open_sessions: bool = False
 
 
 class NamedItemIn(Strict):

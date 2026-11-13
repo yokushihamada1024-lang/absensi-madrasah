@@ -330,3 +330,67 @@ def test_qr_scan_still_source_scan(svc, clock, admin, guru, repo):
     allow_button(repo)
     s = open_s1(svc, clock, admin)
     assert scan_submit(svc, clock, guru, s).source == "scan"
+
+
+# --- buka sesi otomatis (fallback admin lupa) -------------------------------------
+
+
+def auto_open(repo, on=True):
+    repo.settings.save(repo.settings.get().model_copy(update={"auto_open_sessions": on}))
+
+
+def test_auto_open_off_by_default(svc, clock, repo):
+    clock.set_wib(TODAY, "13:30")
+    assert svc.active_sessions() == []
+    assert repo.sessions.find(TODAY, "S1") is None
+
+
+def test_auto_open_respects_window(svc, clock, repo):
+    auto_open(repo)
+    clock.set_wib(TODAY, "13:09")  # jendela S1 mulai 13:10 (early_open 20)
+    assert svc.active_sessions() == []
+    clock.set_wib(TODAY, "13:10")
+    [s] = svc.active_sessions()
+    assert s.code == "S1" and s.opened_by == "sistem" and s.is_open
+    assert svc.active_sessions()[0].session_id == s.session_id  # tidak dobel
+    assert len(repo.sessions.list_by_date(TODAY)) == 1
+    a = repo.audit.recent()[0]
+    assert a.action == "session.auto_open" and a.actor == "sistem"
+    clock.set_wib(TODAY, "17:31")  # setelah S2 selesai: S2 tidak dibuat
+    svc.active_sessions()
+    assert repo.sessions.find(TODAY, "S2") is None
+
+
+def test_auto_open_then_attend_status_from_schedule(svc, clock, guru, repo):
+    auto_open(repo)
+    clock.set_wib(TODAY, "13:40")
+    [s] = svc.active_sessions()
+    a = scan_submit(svc, clock, guru, s)
+    assert a.status == "late" and a.late_min == 10
+
+
+def test_auto_open_does_not_reopen_closed_session(svc, clock, admin, repo):
+    auto_open(repo)
+    clock.set_wib(TODAY, "13:20")
+    [s] = svc.active_sessions()
+    svc.close_session(admin, s.session_id)
+    clock.set_wib(TODAY, "13:30")
+    assert svc.active_sessions() == []
+    assert repo.sessions.get(s.session_id).closed_at is not None
+
+
+def test_auto_open_requires_location(svc, clock, repo):
+    auto_open(repo)
+    repo.settings.save(repo.settings.get().model_copy(update={"lat": None, "lng": None}))
+    clock.set_wib(TODAY, "13:30")
+    assert svc.active_sessions() == []
+
+
+def test_auto_open_with_button_checkin(svc, clock, guru, repo):
+    auto_open(repo)
+    allow_button(repo)
+    clock.set_wib(TODAY, "16:15")
+    [s] = svc.active_sessions()
+    assert s.code == "S2"
+    r = confirm(svc, clock, guru, s)
+    assert svc.submit(guru, r.ticket, "Umar", "Fikih").source == "button"

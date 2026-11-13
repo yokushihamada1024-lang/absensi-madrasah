@@ -11,6 +11,23 @@ function num(v) {
   return v === "" || Number.isNaN(n) ? null : n;
 }
 
+/** Baris opsi on/off (saklar) di form pengaturan; nilainya ikut tersimpan lewat "Simpan pengaturan". */
+function optToggle(id, checked, label, help) {
+  const sw = el("input", { type: "checkbox", class: "switch", role: "switch", checked, id,
+    "aria-describedby": `${id}-help` });
+  const st = el("span", { class: "item-state" });
+  const row = el("div", { class: "opt-toggle" },
+    el("div", { class: "opt-text" }, el("label", { for: id }, label), el("p", { class: "muted small", id: `${id}-help` }, help)),
+    st, sw);
+  const paint = () => {
+    row.classList.toggle("off", !sw.checked);
+    st.textContent = sw.checked ? "Aktif" : "Nonaktif";
+  };
+  paint();
+  sw.addEventListener("change", paint);
+  return { row, input: sw };
+}
+
 function settingsCard(s) {
   const name = input({ value: s.madrasah_name, maxlength: "120" });
   const lat = input({ type: "number", step: "any", value: s.lat ?? "", placeholder: "-6.175392" });
@@ -20,22 +37,13 @@ function settingsCard(s) {
   const grace = input({ type: "number", min: "0", max: "180", value: s.grace_min });
   const early = input({ type: "number", min: "0", max: "180", value: s.early_open_min });
   const rotate = input({ type: "number", min: "10", max: "300", value: s.qr_rotate_sec });
-  const btnCheckin = el("input", { type: "checkbox", class: "switch", role: "switch", checked: !!s.allow_button_checkin,
-    id: "allow-button", "aria-describedby": "allow-button-help" });
-  const btnState = el("span", { class: "item-state" });
-  const btnRow = el("div", { class: "opt-toggle" },
-    el("div", { class: "opt-text" },
-      el("label", { for: "allow-button" }, "Izinkan absen tanpa QR (tombol konfirmasi)"),
-      el("p", { class: "muted small", id: "allow-button-help" },
-        "Cadangan bila layar QR atau kamera HP guru bermasalah. Guru tetap harus berada di dalam radius dan di jam sesi. ",
-        "Lebih rawan GPS palsu daripada QR, jadi aktifkan seperlunya. Absen lewat tombol ditandai “Tombol” di halaman Absensi.")),
-    btnState, btnCheckin);
-  const paintBtn = () => {
-    btnRow.classList.toggle("off", !btnCheckin.checked);
-    btnState.textContent = btnCheckin.checked ? "Aktif" : "Nonaktif";
-  };
-  paintBtn();
-  btnCheckin.addEventListener("change", paintBtn);
+  const btnCheckin = optToggle("allow-button", !!s.allow_button_checkin, "Izinkan absen tanpa QR (tombol konfirmasi)",
+    "Cadangan bila layar QR atau kamera HP guru bermasalah. Guru tetap harus berada di dalam radius dan di jam sesi. "
+    + "Lebih rawan GPS palsu daripada QR, jadi aktifkan seperlunya. Absen lewat tombol ditandai “Tombol” di halaman Absensi.");
+  const autoOpen = optToggle("auto-open", !!s.auto_open_sessions, "Buka sesi otomatis sesuai jadwal",
+    "Cadangan bila admin lupa membuka sesi: sesi terbuka sendiri mulai “Buka scan sebelum mulai” sampai jam selesai, "
+    + "saat guru membuka aplikasi. Sesi yang sudah Anda tutup tidak dibuka lagi. Tanpa admin tidak ada layar QR, "
+    + "jadi biasanya dipakai bersama absen tanpa QR. Tercatat di Log → Audit sebagai “sistem”.");
   const mapEl = el("div", { class: "map", role: "application", "aria-label": "Peta lokasi madrasah" });
   const gpsBtn = act("pin", "Pakai lokasi saya sekarang", { size: "sm" });
   const gpsMsg = el("span", { class: "muted small" });
@@ -52,7 +60,8 @@ function settingsCard(s) {
       field("Toleransi telat (menit)", grace),
       field("Buka scan sebelum mulai (menit)", early),
       field("Rotasi QR (detik)", rotate)),
-    btnRow,
+    btnCheckin.row,
+    autoOpen.row,
     cardFoot(save));
 
   // --- Peta Leaflet (di-vendor) + tile OpenStreetMap ---
@@ -130,7 +139,7 @@ function settingsCard(s) {
       await api("/api/admin/settings", { method: "PUT", body: {
         madrasah_name: name.value.trim(), lat: la, lng: lo, radius_m: num(radius.value), max_accuracy_m: num(acc.value),
         grace_min: num(grace.value), early_open_min: num(early.value), qr_rotate_sec: num(rotate.value),
-        allow_button_checkin: btnCheckin.checked,
+        allow_button_checkin: btnCheckin.input.checked, auto_open_sessions: autoOpen.input.checked,
       } });
       toast("Pengaturan disimpan.");
     } catch (err) {

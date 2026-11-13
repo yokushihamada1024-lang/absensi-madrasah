@@ -54,6 +54,7 @@ def me_summary(
     user: User = Depends(current_user),
     c: AppContext = Depends(ctx),
 ) -> dict:
+    c.svc.ensure_auto_sessions()
     today = wib_date(c.clock())
     period = month or period_of(today)
     if not PERIOD_RE.match(period):

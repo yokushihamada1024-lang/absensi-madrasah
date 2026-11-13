@@ -378,3 +378,20 @@ def test_button_checkin_via_api(env):
     assert rows[0]["source"] == "button"
     # admin tidak boleh memakai endpoint guru
     assert client.post("/api/attendance/confirm", headers=ha, json=body).status_code == 403
+
+
+def test_auto_open_via_summary(env):
+    client, repo, clock = env
+    ha, hg = login(client, "admin"), login(client, "gurua")
+    st = client.get("/api/admin/settings", headers=ha).json()
+    assert st["auto_open_sessions"] is False
+    st.pop("timezone")
+    st["auto_open_sessions"] = True
+    assert client.put("/api/admin/settings", headers=ha, json=st).status_code == 200
+    clock.set_wib(TODAY, "13:25")
+    summ = client.get("/api/me/summary", headers=hg).json()
+    assert summ["today"]["sessions"][0]["is_open"] is True
+    active = client.get("/api/sessions/active", headers=hg).json()
+    assert [s["code"] for s in active] == ["S1"]
+    audit = client.get("/api/admin/audit", headers=ha).json()
+    assert audit[0]["action"] == "session.auto_open" and audit[0]["actor_name"] == "sistem"

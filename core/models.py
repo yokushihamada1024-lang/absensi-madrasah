@@ -33,6 +33,7 @@ class Settings(BaseModel):
     grace_min: int = Field(5, ge=0, le=180)
     early_open_min: int = Field(20, ge=0, le=180)
     allow_button_checkin: bool = False  # fallback: absen tanpa QR, tetap wajib di dalam radius
+    auto_open_sessions: bool = False  # fallback: sesi dibuka sistem sesuai jadwal bila admin belum membuka
     timezone: str = "Asia/Jakarta"
 
     @field_validator("lat")

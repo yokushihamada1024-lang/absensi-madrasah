@@ -16,6 +16,8 @@ from core.payroll import assert_not_final, rate_on
 from core.repo.base import AttendanceFilter, DuplicateAttendanceError, Repository
 from core.timeutil import Clock, parse_hhmm, wib_date, wib_to_utc
 
+SYSTEM_ACTOR = "sistem"  # pelaku di audit/opened_by untuk sesi yang dibuka otomatis
+
 
 def compute_status(scanned_at: datetime, scheduled_start: datetime, grace_min: int) -> tuple[str, int]:
     """diff_min = floor((scanned_at - scheduled_start)/60 dtk); telat jika diff_min > grace."""
@@ -66,6 +68,7 @@ class AttendanceService:
         self.jwt_secret = jwt_secret
         self._locks: dict[tuple[str, str], threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        self._auto_lock = threading.Lock()
 
     # -- util ----------------------------------------------------------------
 
@@ -192,7 +195,50 @@ class AttendanceService:
             slot=slot,
         )
 
+    def ensure_auto_sessions(self) -> list[SessionInstance]:
+        """Buka otomatis sesi yang sedang dalam jadwal bila admin belum membukanya (jika diizinkan).
+
+        Dipicu saat ada yang meminta data sesi (tanpa cron — Render Free bisa tertidur). Jendela sama dengan
+        jendela absen: early_open_min sebelum mulai s/d jam selesai. Sesi yang sudah pernah ada (termasuk yang
+        ditutup admin) tidak disentuh, jadi penutupan manual tetap berlaku.
+        """
+        settings = self.repo.settings.get()
+        if not settings.auto_open_sessions or not settings.location_set:
+            return []
+        now = self.clock()
+        today = wib_date(now)
+        created: list[SessionInstance] = []
+        with self._auto_lock:
+            for d in self.repo.meta.list_session_defs():
+                start = wib_to_utc(today, d.start_hhmm)
+                end = wib_to_utc(today, d.end_hhmm)
+                if not (start - timedelta(minutes=settings.early_open_min) <= now <= end):
+                    continue
+                if self.repo.sessions.find(today, d.code) is not None:
+                    continue
+                s = SessionInstance(
+                    session_id=str(uuid.uuid4()),
+                    date=today,
+                    code=d.code,
+                    scheduled_start=start,
+                    scheduled_end=end,
+                    opened_at=now,
+                    opened_by=SYSTEM_ACTOR,
+                    closed_at=None,
+                )
+                try:
+                    self.repo.sessions.create(s)
+                except Exception:  # kalah balapan dengan proses lain (unique date+code): pakai yang sudah ada
+                    if self.repo.sessions.find(today, d.code) is None:
+                        raise
+                    continue
+                audit.record(self.repo, now, SYSTEM_ACTOR, "session.auto_open", "session", s.session_id, None, s,
+                             "Dibuka otomatis sesuai jadwal")
+                created.append(s)
+        return created
+
     def sessions_today(self) -> list[SessionInstance]:
+        self.ensure_auto_sessions()
         return sorted(self.repo.sessions.list_by_date(wib_date(self.clock())), key=lambda s: s.code)
 
     def active_sessions(self) -> list[SessionInstance]:

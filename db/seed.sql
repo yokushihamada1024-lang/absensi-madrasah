@@ -19,5 +19,5 @@ on conflict (name) do nothing;
 insert into absensi.settings (key, value) values
     ('madrasah_name', 'Madrasah'), ('lat', ''), ('lng', ''), ('radius_m', '100'),
     ('max_accuracy_m', '75'), ('qr_rotate_sec', '30'), ('grace_min', '5'), ('early_open_min', '20'),
-    ('allow_button_checkin', 'FALSE'), ('timezone', 'Asia/Jakarta')
+    ('allow_button_checkin', 'FALSE'), ('auto_open_sessions', 'FALSE'), ('timezone', 'Asia/Jakarta')
 on conflict (key) do nothing;
