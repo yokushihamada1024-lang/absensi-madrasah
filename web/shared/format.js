@@ -69,7 +69,7 @@ export function statusText(status, lateMin) {
   return status === "late" ? `Terlambat ${lateMin} menit` : "Tepat waktu";
 }
 
-/** Helper DOM aman: el("div", {class: "x"}, "teks", child) — tidak pernah memakai innerHTML. */
+/** Helper DOM aman: el("div", {class: "x"}, "teks", child) — teks selalu jadi text node. */
 export function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
