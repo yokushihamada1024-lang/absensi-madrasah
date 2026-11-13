@@ -36,10 +36,24 @@ class LoginRateLimiter:
 
     def fail(self, username: str, ip: str) -> None:
         now = self.clock().timestamp()
-        u = username.strip().lower()
+        u = username.strip().lower()[:64]
         with self._lock:
             self._fails[f"ip:{u}|{ip}"].append(now)
             self._fails[f"u:{u}"].append(now)
+            if len(self._fails) > self.MAX_KEYS:
+                self._purge(now)
+
+    MAX_KEYS = 5000
+
+    def _purge(self, now: float) -> None:
+        """Buang entri kedaluwarsa agar memori tidak membengkak (mis. ribuan username acak)."""
+        longest = max(self.per_ip[1], self.per_user[1])
+        for key in list(self._fails):
+            q = self._fails[key]
+            while q and now - q[0] > longest:
+                q.popleft()
+            if not q:
+                del self._fails[key]
 
     def success(self, username: str, ip: str) -> None:
         u = username.strip().lower()

@@ -331,3 +331,16 @@ def test_dev_router_absent_in_production(clock):
 
 def test_hash_pin_used():
     assert hash_pin(PIN).startswith("$argon2")
+
+
+def test_rate_limiter_purges_old_keys(clock):
+    from api.ratelimit import LoginRateLimiter
+
+    rl = LoginRateLimiter(clock)
+    rl.MAX_KEYS = 50
+    for i in range(40):
+        rl.fail(f"acak{i}", "1.1.1.1")
+    clock.advance(seconds=901)
+    rl.fail("baru", "1.1.1.1")
+    assert len(rl._fails) <= 2
+    assert rl.retry_after("baru", "1.1.1.1") == 0

@@ -1,0 +1,103 @@
+# Render Blueprint — 1 Web Service (API) + 2 Static Site (PWA guru, Admin). Semua plan Free.
+# Rahasia ditandai `sync: false` (diisi di dashboard, tidak pernah masuk repo).
+# Header CSP Static Site harus sama dengan scripts/web_headers.py (diperiksa oleh tests/test_deploy_config.py).
+# Setelah deploy pertama, ganti "https://*.onrender.com" di connect-src dengan URL API persis (lihat README).
+
+services:
+  # ---------------------------------------------------------------- API
+  - type: web
+    name: absensi-api
+    runtime: python
+    plan: free
+    region: singapore
+    # Tepat 1 instance: lock in-process & rate-limit login ada di memori proses. JANGAN scale horizontal.
+    numInstances: 1
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: ENV
+        value: production
+      - key: REPO_BACKEND
+        value: postgres
+      - key: TZ
+        value: Asia/Jakarta
+      - key: DATABASE_URL          # Supabase → Connect → Session pooler (port 5432)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: QR_MASTER_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS       # https://absensi-guru.onrender.com,https://absensi-admin.onrender.com
+        sync: false
+
+  # ---------------------------------------------------------- PWA guru
+  - type: web
+    name: absensi-guru
+    runtime: static
+    buildCommand: >-
+      rm -rf web/teacher/shared && cp -r web/shared web/teacher/shared &&
+      echo "export const API_BASE_URL = \"$API_BASE_URL\";" > web/teacher/config.js
+    staticPublishPath: ./web/teacher
+    envVars:
+      - key: API_BASE_URL          # https://absensi-api.onrender.com (tanpa garis miring di akhir)
+        sync: false
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: geolocation=(self), camera=(self), microphone=()
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; connect-src 'self' https://*.onrender.com; manifest-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; worker-src 'self' blob:"
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /config.js
+        name: Cache-Control
+        value: no-cache
+
+  # -------------------------------------------------------------- Admin
+  - type: web
+    name: absensi-admin
+    runtime: static
+    buildCommand: >-
+      rm -rf web/admin/shared && cp -r web/shared web/admin/shared &&
+      echo "export const API_BASE_URL = \"$API_BASE_URL\";" > web/admin/config.js
+    staticPublishPath: ./web/admin
+    envVars:
+      - key: API_BASE_URL
+        sync: false
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: geolocation=(self), camera=(), microphone=(), screen-wake-lock=(self)
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; connect-src 'self' https://*.onrender.com; manifest-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org; worker-src 'self'"
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
+      - path: /config.js
+        name: Cache-Control
+        value: no-cache
