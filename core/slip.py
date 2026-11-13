@@ -39,8 +39,8 @@ OK, OK_SOFT = colors.HexColor("#0b7a6d"), colors.HexColor("#e3f5f1")
 WARN, WARN_SOFT = colors.HexColor("#a14a07"), colors.HexColor("#fdf1dc")
 
 PAGE_W, PAGE_H = A4
-MARGIN = 18 * mm
-HEADER_H = 30 * mm      # tinggi blok kop biru di halaman pertama
+MARGIN = 15 * mm
+HEADER_H = 32 * mm      # tinggi blok kop biru di halaman pertama
 FOOTER_Y = 12 * mm
 CONTENT_W = PAGE_W - 2 * MARGIN
 
@@ -51,36 +51,36 @@ def _styles() -> dict[str, ParagraphStyle]:
                           textColor=TEXT)
     return {
         "base": base,
-        "eyebrow": ParagraphStyle("eyebrow", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9,
-                                  textColor=FAINT),
-        "name": ParagraphStyle("name", parent=base, fontName="Helvetica-Bold", fontSize=16, leading=19,
+        "eyebrow": ParagraphStyle("eyebrow", parent=base, fontName="Helvetica-Bold", fontSize=8, leading=10,
+                                  textColor=MUTED),
+        "name": ParagraphStyle("name", parent=base, fontName="Helvetica-Bold", fontSize=19, leading=23,
                                textColor=INK),
-        "name_sub": ParagraphStyle("name_sub", parent=base, fontSize=8.4, leading=11, textColor=MUTED),
-        "kv_l": ParagraphStyle("kv_l", parent=base, fontSize=8.4, leading=11, textColor=MUTED),
-        "kv_r": ParagraphStyle("kv_r", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
+        "name_sub": ParagraphStyle("name_sub", parent=base, fontSize=10, leading=13, textColor=MUTED),
+        "kv_l": ParagraphStyle("kv_l", parent=base, fontSize=10, leading=13, textColor=MUTED),
+        "kv_r": ParagraphStyle("kv_r", parent=base, fontName="Helvetica-Bold", fontSize=10, leading=13,
                                alignment=TA_RIGHT),
-        "kv_warn": ParagraphStyle("kv_warn", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
+        "kv_warn": ParagraphStyle("kv_warn", parent=base, fontName="Helvetica-Bold", fontSize=10, leading=13,
                                   alignment=TA_RIGHT, textColor=WARN),
-        "h2": ParagraphStyle("h2", parent=base, fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=INK),
-        "th": ParagraphStyle("th", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9, textColor=FAINT),
-        "thr": ParagraphStyle("thr", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9,
-                              textColor=FAINT, alignment=TA_RIGHT),
-        "cell": ParagraphStyle("cell", parent=base, fontSize=8.6, leading=11),
-        "cell_muted": ParagraphStyle("cell_muted", parent=base, fontSize=8.6, leading=11, textColor=FAINT),
-        "cellr": ParagraphStyle("cellr", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
+        "h2": ParagraphStyle("h2", parent=base, fontName="Helvetica-Bold", fontSize=12.5, leading=15, textColor=INK),
+        "th": ParagraphStyle("th", parent=base, fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=MUTED),
+        "thr": ParagraphStyle("thr", parent=base, fontName="Helvetica-Bold", fontSize=8, leading=10,
+                              textColor=MUTED, alignment=TA_RIGHT),
+        "cell": ParagraphStyle("cell", parent=base, fontSize=10.2, leading=13),
+        "cell_muted": ParagraphStyle("cell_muted", parent=base, fontSize=10.2, leading=13, textColor=MUTED),
+        "cellr": ParagraphStyle("cellr", parent=base, fontName="Helvetica-Bold", fontSize=10.2, leading=13,
                                 alignment=TA_RIGHT),
-        "ok": ParagraphStyle("ok", parent=base, fontSize=8.4, leading=11, textColor=OK),
-        "warn": ParagraphStyle("warn", parent=base, fontSize=8.4, leading=11, textColor=WARN),
-        "sum_l": ParagraphStyle("sum_l", parent=base, fontSize=8.8, leading=12, textColor=MUTED),
-        "sum_r": ParagraphStyle("sum_r", parent=base, fontName="Helvetica-Bold", fontSize=8.8, leading=12,
+        "ok": ParagraphStyle("ok", parent=base, fontSize=10.2, leading=13, textColor=OK),
+        "warn": ParagraphStyle("warn", parent=base, fontSize=10.2, leading=13, textColor=WARN),
+        "sum_l": ParagraphStyle("sum_l", parent=base, fontSize=10.5, leading=14, textColor=MUTED),
+        "sum_r": ParagraphStyle("sum_r", parent=base, fontName="Helvetica-Bold", fontSize=10.5, leading=14,
                                 alignment=TA_RIGHT),
-        "thp_label": ParagraphStyle("thp_label", parent=base, fontName="Helvetica-Bold", fontSize=7, leading=9,
+        "thp_label": ParagraphStyle("thp_label", parent=base, fontName="Helvetica-Bold", fontSize=8.8, leading=11,
                                     textColor=BRASS_300),
-        "thp_sub": ParagraphStyle("thp_sub", parent=base, fontSize=7.6, leading=10,
-                                  textColor=colors.HexColor("#b9c5db")),
-        "thp_value": ParagraphStyle("thp_value", parent=base, fontName="Helvetica-Bold", fontSize=18, leading=22,
+        "thp_sub": ParagraphStyle("thp_sub", parent=base, fontSize=9.5, leading=12,
+                                  textColor=colors.HexColor("#c8d2e4")),
+        "thp_value": ParagraphStyle("thp_value", parent=base, fontName="Helvetica-Bold", fontSize=22, leading=26,
                                     textColor=colors.white, alignment=TA_RIGHT),
-        "note": ParagraphStyle("note", parent=base, fontSize=7.8, leading=11, textColor=MUTED),
+        "note": ParagraphStyle("note", parent=base, fontSize=9.5, leading=13.5, textColor=MUTED),
     }
 
 
@@ -113,7 +113,7 @@ def _spaced(canvas, x: float, y: float, text: str, font: str, size: float, space
 class Pill(Flowable):
     """Label status berbentuk kapsul: titik + teks berjarak, padding simetris, teks di tengah vertikal."""
 
-    FONT, SIZE, TRACK, H, PAD, DOT, GAP = "Helvetica-Bold", 6.8, 1.0, 13.5, 7.0, 1.7, 4.0
+    FONT, SIZE, TRACK, H, PAD, DOT, GAP = "Helvetica-Bold", 8.2, 1.1, 17.0, 8.5, 2.0, 4.5
 
     def __init__(self, text: str, fg, bg, border) -> None:
         super().__init__()
@@ -160,8 +160,8 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
         canvas.setStrokeColor(LINE)
         canvas.setLineWidth(0.5)
         canvas.line(MARGIN, FOOTER_Y + 4 * mm, PAGE_W - MARGIN, FOOTER_Y + 4 * mm)
-        canvas.setFont("Helvetica", 6.8)
-        canvas.setFillColor(FAINT)
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(MUTED)
         canvas.drawString(MARGIN, FOOTER_Y, f"{madrasah_name}  ·  Slip gaji {line.user.name}  ·  {plabel}")
         canvas.drawRightString(PAGE_W - MARGIN, FOOTER_Y, f"Halaman {canvas.getPageNumber()}")
         canvas.restoreState()
@@ -175,34 +175,34 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
         canvas.setFillColor(BRASS)
         canvas.rect(0, top - 0.8 * mm, PAGE_W, 0.8 * mm, stroke=0, fill=1)
         # Dua baris, baseline kiri dan kanan sejajar, ditengahkan di dalam kop.
-        b1 = top + HEADER_H / 2 + 1.2 * mm   # baris judul
-        b2 = b1 - 5.6 * mm                   # baris keterangan
+        b1 = top + HEADER_H / 2 + 1.6 * mm   # baris judul
+        b2 = b1 - 6.6 * mm                   # baris keterangan
         right = PAGE_W - MARGIN
         canvas.setStrokeColor(BRASS_300)
         canvas.setLineWidth(1.2)
-        _khatam(canvas, MARGIN + 4.6 * mm, (b1 + b2) / 2 + 1.2 * mm, 7.2 * mm)
-        tx = MARGIN + 13 * mm
+        _khatam(canvas, MARGIN + 5 * mm, (b1 + b2) / 2 + 1.6 * mm, 8 * mm)
+        tx = MARGIN + 14 * mm
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 15)
+        canvas.setFont("Helvetica-Bold", 18)
         canvas.drawString(tx, b1, madrasah_name)
         canvas.setFillColor(colors.HexColor("#b9c5db"))
-        canvas.setFont("Helvetica", 8.4)
+        canvas.setFont("Helvetica", 10)
         canvas.drawString(tx, b2, "Rekap honor mengajar berdasarkan absensi")
         canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 15)
+        canvas.setFont("Helvetica-Bold", 18)
         canvas.drawRightString(right, b1, plabel)
         canvas.setFillColor(BRASS_300)
-        _spaced(canvas, right, b2, "SLIP GAJI GURU", "Helvetica-Bold", 7.2, 1.8, align="right")
+        _spaced(canvas, right, b2, "SLIP GAJI GURU", "Helvetica-Bold", 8.5, 1.8, align="right")
         canvas.restoreState()
         draw_common(canvas)
 
     def on_later(canvas, _doc) -> None:
         canvas.saveState()
         y = PAGE_H - 13 * mm
-        canvas.setFont("Helvetica-Bold", 8.5)
+        canvas.setFont("Helvetica-Bold", 10)
         canvas.setFillColor(INK)
         canvas.drawString(MARGIN, y, madrasah_name)
-        canvas.setFont("Helvetica", 8)
+        canvas.setFont("Helvetica", 9.5)
         canvas.setFillColor(MUTED)
         canvas.drawRightString(PAGE_W - MARGIN, y, f"Slip gaji {line.user.name}  ·  {plabel}  ·  {label}")
         canvas.setStrokeColor(LINE)
@@ -251,8 +251,8 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
         kv_rows.append([Paragraph("Difinalisasi", st["kv_l"]),
                         Paragraph(format_datetime_id(line.finalized_at), st["kv_r"])])
     kv_rows.append([Paragraph("Status", st["kv_l"]), pill])
-    right_w = CONTENT_W * 0.42
-    kv = Table(kv_rows, colWidths=[right_w * 0.42, right_w * 0.58])
+    right_w = CONTENT_W * 0.5
+    kv = Table(kv_rows, colWidths=[right_w * 0.32, right_w * 0.68])
     kv.setStyle(TableStyle([
         ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
@@ -262,7 +262,7 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
     who = [Paragraph("DIBERIKAN KEPADA", st["eyebrow"]), Spacer(1, 3),
            Paragraph(_esc(line.user.name), st["name"]), Spacer(1, 2.5),
            Paragraph(f"@{_esc(line.user.username)}  ·  ID {line.user.user_id[:8]}", st["name_sub"])]
-    gap = CONTENT_W * 0.08
+    gap = CONTENT_W * 0.06
     ident = flat(Table([[who, "", kv]], colWidths=[CONTENT_W - right_w - gap, gap, right_w]))
     story: list = [ident, Spacer(1, 10 * mm)]
 
@@ -289,13 +289,13 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
     empty = len(rows) == 1
     if empty:
         rows.append(["", Paragraph("Tidak ada pertemuan pada periode ini.", st["cell_muted"]), "", "", "", "", ""])
-    detail = Table(rows, colWidths=[10 * mm, 42 * mm, 16 * mm, 21 * mm, 29 * mm, 30 * mm, None], repeatRows=1)
+    detail = Table(rows, colWidths=[9 * mm, 47 * mm, 16 * mm, 20 * mm, 32 * mm, 32 * mm, None], repeatRows=1)
     ts = [
         ("LINEABOVE", (0, 0), (-1, 0), 0.9, INK), ("LINEBELOW", (0, 0), (-1, 0), 0.5, LINE_STRONG),
         ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, 0), 6), ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 7), ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
+        ("TOPPADDING", (0, 1), (-1, -1), 6), ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
         ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (0, -1), 0), ("RIGHTPADDING", (-1, 0), (-1, -1), 0),
     ]
