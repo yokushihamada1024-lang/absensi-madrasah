@@ -58,11 +58,42 @@ def test_scan_too_early_rejected(svc, clock, admin, guru):
 
 def test_scan_after_end_rejected(svc, clock, admin, guru):
     s = open_s1(svc, clock, admin)
-    clock.set_wib(TODAY, "15:46")
-    tok = svc.qr(s.session_id).token
+    clock.set_wib(TODAY, "15:45")
+    tok = svc.qr(s.session_id).token  # QR terakhir tepat di jam selesai
+    clock.advance(seconds=10)
     with pytest.raises(AppError) as e:
         scan(svc, clock, guru, s, token=tok)
     assert e.value.code == "SESSION_CLOSED"
+
+
+def test_session_auto_closed_after_end(svc, clock, admin, guru, repo):
+    s = open_s1(svc, clock, admin)
+    clock.set_wib(TODAY, "15:45")
+    assert [x.session_id for x in svc.active_sessions()] == [s.session_id]  # tepat jam selesai: masih terbuka
+    clock.set_wib(TODAY, "15:46")
+    assert svc.active_sessions() == []
+    closed = repo.sessions.get(s.session_id)
+    assert closed.closed_at == s.scheduled_end  # dicatat jam selesai terjadwal, bukan jam sekarang
+    a = repo.audit.recent()[0]
+    assert a.action == "session.auto_close" and a.actor == "sistem"
+    with pytest.raises(AppError) as e:
+        svc.qr(s.session_id)  # layar QR admin berhenti
+    assert e.value.code == "SESSION_CLOSED"
+    svc.active_sessions()  # tidak menutup/mencatat dua kali
+    assert sum(1 for x in repo.audit.recent() if x.action == "session.auto_close") == 1
+    with pytest.raises(AppError) as e:
+        svc.open_session(admin, "S1")  # tidak bisa dibuka lagi setelah jam lewat
+    assert e.value.code == "SESSION_OVER"
+
+
+def test_auto_close_keeps_ticket_submit_valid(svc, clock, admin, guru):
+    s = open_s1(svc, clock, admin)
+    clock.set_wib(TODAY, "15:44")
+    r = scan(svc, clock, guru, s)
+    clock.set_wib(TODAY, "15:47")
+    svc.active_sessions()  # memicu auto-close
+    a = svc.submit(guru, r.ticket, "Umar", "Fikih")  # tiket dari sebelum jam selesai tetap sah
+    assert a.session_id == s.session_id
 
 
 def test_scan_after_close_rejected(svc, clock, admin, guru):

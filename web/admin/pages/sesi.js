@@ -120,7 +120,7 @@ function showQr(item) {
       ], rows, { empty: "Belum ada." }));
     } catch { /* indikator koneksi sudah ditangani polling QR */ }
   }
-  const listTimer = setInterval(refreshList, 15_000);
+  const listTimer = setInterval(() => { if (document.visibilityState === "visible") refreshList(); }, 15_000);
 
   // Wake Lock: layar tidak boleh mati selama sesi.
   let lock = null;

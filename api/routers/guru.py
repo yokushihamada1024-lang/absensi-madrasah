@@ -11,7 +11,7 @@ from core.attendance import ScanResult, compute_status, scan_window
 from core.models import AppError, User
 from core.payroll import compute_line, rate_on
 from core.security import verify_pin
-from core.timeutil import period_label, period_of, to_iso, wib_date
+from core.timeutil import period_label, period_of, to_iso, wib_date, wib_hhmm
 
 router = APIRouter(prefix="/api")
 
@@ -54,7 +54,7 @@ def me_summary(
     user: User = Depends(current_user),
     c: AppContext = Depends(ctx),
 ) -> dict:
-    c.svc.ensure_auto_sessions()
+    c.svc.sync_sessions()
     today = wib_date(c.clock())
     period = month or period_of(today)
     if not PERIOD_RE.match(period):
@@ -65,6 +65,7 @@ def me_summary(
     todays = {s.session_id: s for s in c.repo.sessions.list_by_date(today)}
     today_rows = [a for a in line.rows if a.date == today] if period == period_of(today) else []
     by_code = {a.code: a for a in today_rows}
+    defs = {d.code: d for d in c.repo.meta.list_session_defs()}
     today_sessions = []
     for code, name in sorted(names.items()):
         a = by_code.get(code)
@@ -72,6 +73,8 @@ def me_summary(
         today_sessions.append({
             "code": code,
             "name": name,
+            # Jam selesai: dari sesi yang sudah dibuka (bila ada) agar sesuai jadwal saat itu.
+            "end_hhmm": wib_hhmm(inst.scheduled_end) if inst else defs[code].end_hhmm,
             "is_open": bool(inst and inst.is_open),
             "attended": a is not None,
             "status": a.status if a else None,

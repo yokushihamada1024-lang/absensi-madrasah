@@ -156,6 +156,12 @@ function pageLogin() {
 
 // --- halaman: Beranda --------------------------------------------------------
 
+/** Jam:menit WIB sekarang ("HH:MM"), untuk dibandingkan dengan jam sesi. */
+function nowHhmm() {
+  const p = wibParts(new Date());
+  return `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
+}
+
 function sessionItem(s) {
   let cls = "";
   let pill;
@@ -168,6 +174,9 @@ function sessionItem(s) {
     cls = "open";
     pill = el("span", { class: "pill pill-open" }, "Dibuka");
     meta = state.buttonCheckin ? "Silakan scan atau konfirmasi sekarang" : "Silakan scan sekarang";
+  } else if (s.end_hhmm && s.end_hhmm < nowHhmm()) {
+    pill = el("span", { class: "pill pill-idle" }, "Tidak hadir");
+    meta = `Sesi sudah selesai (${s.end_hhmm} WIB)`;
   } else {
     pill = el("span", { class: "pill pill-idle" }, "Belum hadir");
     meta = "Menunggu sesi dibuka";
@@ -264,6 +273,16 @@ async function pageHome() {
   let alive = true;
   let timer = null;
   let inflight = false;
+  let dayDone = false;
+
+  // Hemat jam server (Render Free): segarkan hanya saat aplikasi terlihat, dan berhenti bila semua sesi
+  // hari ini sudah selesai/sudah diabsen. Membuka ulang aplikasi tetap langsung memuat data terbaru.
+  const isDayDone = (s) => s.today.sessions.every((x) => x.attended || (!x.is_open && x.end_hhmm < nowHhmm()));
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (alive && !dayDone && document.visibilityState === "visible") timer = setTimeout(load, HOME_REFRESH_MS);
+  };
 
   async function load() {
     if (inflight) return;
@@ -272,6 +291,7 @@ async function pageHome() {
     try {
       const s = await api("/api/me/summary");
       if (!alive) return;
+      dayDone = isDayDone(s);
       // Hanya gambar ulang bila data berubah, agar tidak berkedip tiap penyegaran.
       state.buttonCheckin = !!s.button_checkin;
       const key = JSON.stringify([s.today, s.meetings, s.estimated_gross, s.dates, s.period_status, s.current_rate,
@@ -286,7 +306,7 @@ async function pageHome() {
       if (first) body.replaceChildren(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
     } finally {
       inflight = false;
-      if (alive) timer = setTimeout(load, HOME_REFRESH_MS);
+      schedule();
     }
   }
 
@@ -326,8 +346,11 @@ async function pageHome() {
     }
   }
 
-  // Segarkan segera saat aplikasi kembali dibuka / koneksi pulih.
-  const wake = () => { if (document.visibilityState === "visible" && navigator.onLine) load(); };
+  // Segarkan segera saat aplikasi kembali dibuka / koneksi pulih; berhenti saat aplikasi ditinggal.
+  const wake = () => {
+    if (document.visibilityState !== "visible") { clearTimeout(timer); timer = null; return; }
+    if (navigator.onLine) load();
+  };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);
   state.cleanup.push(() => {

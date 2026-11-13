@@ -1,5 +1,5 @@
 import { api } from "../shared/api.js";
-import { tanggal, todayWib } from "../shared/format.js";
+import { tanggal, todayWib, wibParts } from "../shared/format.js";
 import { go, mount, onLeave, refresh } from "../app.js";
 import { act, alertBox, el, icon, loading, statusPill, table } from "../ui.js";
 import { countUp } from "../shared/fx.js";
@@ -58,7 +58,19 @@ export async function pageDashboard() {
       { label: "Sumber", render: (a) => ({ manual: "Manual", button: "Tombol" }[a.source] || "Scan") },
     ], att.slice().sort((x, y) => x.scanned_at.localeCompare(y.scanned_at)), { empty: "Belum ada yang absen." }),
   );
-  // Segarkan tiap 60 dtk; refresh() menjalankan cleanup sehingga timer tidak menumpuk.
-  const t = setTimeout(() => refresh(), 60_000);
-  onLeave(() => clearTimeout(t));
+  // Segarkan tiap 60 dtk hanya selama ada sesi yang belum selesai dan tab sedang dilihat — hemat jam server
+  // (Render Free). refresh() menjalankan cleanup sehingga timer tidak menumpuk.
+  const p = wibParts(new Date());
+  const now = `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
+  const pending = sess.sessions.some((s) => s.session?.is_open || (!s.session && s.end_hhmm >= now));
+  let t = null;
+  const tick = () => {
+    clearTimeout(t);
+    t = null;
+    if (document.visibilityState === "visible") refresh();
+  };
+  const onVis = () => { if (document.visibilityState === "visible" && pending && !t) tick(); };
+  if (pending) t = setTimeout(tick, 60_000);
+  document.addEventListener("visibilitychange", onVis);
+  onLeave(() => { clearTimeout(t); document.removeEventListener("visibilitychange", onVis); });
 }

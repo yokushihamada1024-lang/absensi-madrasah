@@ -180,6 +180,7 @@ class AttendanceService:
         return closed
 
     def qr(self, session_id: str) -> QrPayload:
+        self.close_expired_sessions()
         s = self.repo.sessions.get(session_id)
         if s is None:
             raise AppError("SESSION_NOT_FOUND", "Sesi tidak ditemukan.", 404)
@@ -237,8 +238,33 @@ class AttendanceService:
                 created.append(s)
         return created
 
-    def sessions_today(self) -> list[SessionInstance]:
+    def close_expired_sessions(self) -> list[SessionInstance]:
+        """Tutup otomatis sesi hari ini yang masih terbuka padahal jam selesainya sudah lewat.
+
+        Absen memang sudah ditolak setelah jam selesai (check_window); ini membuat statusnya ikut "Ditutup",
+        sehingga layar QR admin berhenti polling dan beranda guru berhenti menampilkan "Dibuka".
+        closed_at diisi jam selesai terjadwal (bukan jam sekarang) agar data tetap akurat.
+        """
+        now = self.clock()
+        closed: list[SessionInstance] = []
+        with self._auto_lock:
+            for s in self.repo.sessions.list_by_date(wib_date(now)):
+                if not s.is_open or now <= s.scheduled_end:
+                    continue
+                c = s.model_copy(update={"closed_at": s.scheduled_end})
+                self.repo.sessions.update(c)
+                audit.record(self.repo, now, SYSTEM_ACTOR, "session.auto_close", "session", s.session_id, s, c,
+                             "Ditutup otomatis: jam sesi selesai")
+                closed.append(c)
+        return closed
+
+    def sync_sessions(self) -> None:
+        """Buka (jika diizinkan) & tutup sesi otomatis sesuai jadwal. Murah: dipanggil saat data sesi diminta."""
         self.ensure_auto_sessions()
+        self.close_expired_sessions()
+
+    def sessions_today(self) -> list[SessionInstance]:
+        self.sync_sessions()
         return sorted(self.repo.sessions.list_by_date(wib_date(self.clock())), key=lambda s: s.code)
 
     def active_sessions(self) -> list[SessionInstance]:
