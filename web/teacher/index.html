@@ -3,27 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f766e">
+  <meta name="theme-color" content="#0e1f3d">
   <meta name="description" content="Absensi guru madrasah dengan scan QR">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Absensi Guru">
   <title>Absensi Guru</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="shared/base.css">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <div id="net-banner" class="banner banner-offline" hidden>Butuh koneksi internet untuk absen.</div>
-  <div id="slow-banner" class="banner banner-slow" hidden role="status">
-    <span class="spinner" aria-hidden="true"></span> Menghubungkan ke server… (bisa sampai 1 menit)
+  <div id="boot" class="boot" role="status" aria-live="polite">
+    <div class="boot-inner">
+      <svg class="boot-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="3">
+          <rect x="20" y="20" width="60" height="60" rx="6"/>
+          <rect x="20" y="20" width="60" height="60" rx="6" transform="rotate(45 50 50)"/>
+        </g>
+      </svg>
+      <div class="boot-title">Absensi Guru</div>
+      <div class="boot-sub">Menyiapkan aplikasi…</div>
+      <span class="bars" aria-hidden="true"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></span>
+    </div>
   </div>
-  <main id="app" aria-live="polite">
-    <p class="muted center pad">Memuat…</p>
-  </main>
+  <div id="net-banner" class="banner banner-offline" hidden>Tidak ada internet. Absen butuh koneksi.</div>
+  <div id="slow-banner" class="banner banner-slow" hidden role="status">
+    <span class="bars" aria-hidden="true"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></span>
+    Server sedang bangun — bisa sampai 1 menit.
+  </div>
+  <main id="app" aria-live="polite"></main>
   <noscript><p class="pad">Aplikasi ini membutuhkan JavaScript.</p></noscript>
 </body>
 </html>

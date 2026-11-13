@@ -4,33 +4,54 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0e1f3d">
   <title>Admin Absensi Madrasah</title>
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="shared/base.css">
   <link rel="stylesheet" href="styles.css">
   <script src="vendor/leaflet/leaflet.js" defer></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
+  <div id="boot" class="boot" role="status" aria-live="polite">
+    <div class="boot-inner">
+      <svg class="boot-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="3">
+          <rect x="20" y="20" width="60" height="60" rx="6"/>
+          <rect x="20" y="20" width="60" height="60" rx="6" transform="rotate(45 50 50)"/>
+        </g>
+      </svg>
+      <div class="boot-title">Admin Absensi</div>
+      <div class="boot-sub">Menyiapkan panel…</div>
+      <span class="bars" aria-hidden="true"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></span>
+    </div>
+  </div>
   <div id="slow-banner" class="banner banner-slow" hidden role="status">
-    <span class="spinner" aria-hidden="true"></span> Menghubungkan ke server… (bisa sampai 1 menit)
+    <span class="bars" aria-hidden="true"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></span>
+    Server sedang bangun — bisa sampai 1 menit.
   </div>
   <div id="layout" class="layout">
-    <nav id="nav" class="nav" hidden>
-      <div class="brand" id="brand">Admin Absensi</div>
-      <a href="#/dashboard" data-route="/dashboard">Dashboard Hari Ini</a>
-      <a href="#/sesi" data-route="/sesi">Sesi &amp; QR</a>
-      <a href="#/guru" data-route="/guru">Guru</a>
-      <a href="#/absensi" data-route="/absensi">Absensi</a>
-      <a href="#/penggajian" data-route="/penggajian">Penggajian</a>
-      <a href="#/pengaturan" data-route="/pengaturan">Pengaturan</a>
-      <a href="#/log" data-route="/log">Log</a>
+    <nav id="nav" class="nav" hidden aria-label="Menu utama">
+      <div class="brand" id="brand">
+        <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="5"><rect x="20" y="20" width="60" height="60" rx="6"/><rect x="20" y="20" width="60" height="60" rx="6" transform="rotate(45 50 50)"/></g></svg>
+        <span>Admin Absensi</span>
+      </div>
+      <div class="nav-links">
+        <a href="#/dashboard" data-route="/dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z"/></svg><span>Hari ini</span></a>
+        <a href="#/sesi" data-route="/sesi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM18 14h2M14 18h2v2"/></svg><span>Sesi &amp; QR</span></a>
+        <a href="#/guru" data-route="/guru"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c.8-3.5 4-5.5 8-5.5s7.2 2 8 5.5"/></svg><span>Guru</span></a>
+        <a href="#/absensi" data-route="/absensi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM5 9h14M9 3v4M15 3v4M8.5 14l2 2 4-4"/></svg><span>Absensi</span></a>
+        <a href="#/penggajian" data-route="/penggajian"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v11H3zM3 11h18M7 15h3"/></svg><span>Penggajian</span></a>
+        <a href="#/pengaturan" data-route="/pengaturan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4"/></svg><span>Pengaturan</span></a>
+        <a href="#/log" data-route="/log"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6zM9 10h6M9 14h6M9 18h4"/></svg><span>Log</span></a>
+      </div>
       <div class="nav-foot">
-        <div id="who" class="muted small"></div>
-        <button id="logout" class="btn btn-ghost btn-sm" type="button">Keluar</button>
+        <div class="who-wrap"><span class="avatar" id="avatar" aria-hidden="true"></span><span id="who" class="who"></span></div>
+        <button id="logout" class="btn btn-sm btn-nav" type="button">Keluar</button>
       </div>
     </nav>
-    <main id="app" class="content" aria-live="polite"><p class="muted">Memuat…</p></main>
+    <main id="app" class="content" aria-live="polite"></main>
   </div>
   <dialog id="dialog" class="dialog"></dialog>
   <div id="toast" class="toast" role="status" hidden></div>

@@ -1,7 +1,8 @@
 // PWA Guru — vanilla JS; DOM dibangun lewat el()/textContent (tidak ada HTML mentah).
 import { api, ApiError, clearToken, configureApi, getToken, setToken, warmUp } from "./shared/api.js";
-import { clear, el, hhmm, periode, periodNow, rupiah, shiftPeriod, statusText, tanggal, tanggalPendek, todayWib }
-  from "./shared/format.js";
+import { clear, el, hhmm, periode, periodNow, rupiah, shiftPeriod, statusText, tanggal, tanggalPendek, todayWib,
+  wibParts } from "./shared/format.js";
+import { bars, busy, countUp, dismissBoot, enter, haptic, icon, installRipple, khatam, loadingBlock } from "./shared/fx.js";
 import { CameraError, geoErrorKind, getPosition, startScanner, watchPosition } from "./scanner.js";
 
 const TOKEN_KEY = "absensi_guru_token";
@@ -37,28 +38,35 @@ function runCleanup() {
   }
 }
 
+/** Ganti isi halaman. animate=false untuk pembaruan di halaman yang sama (mis. loading → data). */
 function view(...children) {
+  let animate = true;
+  if (children[0] && children[0].__noAnim) { children.shift(); animate = false; }
   runCleanup();
   clear(root).append(...children.filter((c) => c !== null && c !== undefined && c !== false));
-  window.scrollTo(0, 0);
+  if (animate) { enter(root); window.scrollTo(0, 0); }
+  dismissBoot();
 }
+const SAME = { __noAnim: true };
 
 function errorBox(err, extraChildren = []) {
   const msg = err instanceof ApiError ? err.message : "Terjadi kesalahan. Coba lagi.";
   return el("div", { class: "alert alert-err", role: "alert" }, msg, ...extraChildren);
 }
 
-function loading(text = "Memuat…") {
-  return el("p", { class: "muted center pad" }, el("span", { class: "spinner" }), " ", text);
-}
+const loading = (text = "Memuat…") => loadingBlock(text);
 
 function topbar(showBack = false) {
   const left = showBack
-    ? el("button", { class: "btn btn-link", onclick: () => go("/") }, "‹ Beranda")
+    ? el("button", { class: "btn btn-link", onclick: () => go("/") }, icon("back"), "Beranda")
     : el("div", {}, el("div", { class: "who" }, state.user ? state.user.name : ""),
       el("div", { class: "date" }, tanggal(todayWib(), true)));
   return el("header", { class: "topbar" }, left,
     showBack ? el("span") : el("button", { class: "btn btn-link", onclick: logout }, "Keluar"));
+}
+
+function emptyState(text) {
+  return el("div", { class: "empty" }, khatam(), el("p", {}, text));
 }
 
 function updateOnline() { netBanner.hidden = navigator.onLine; }
@@ -88,23 +96,38 @@ function logout() {
 
 function pageLogin() {
   const user = el("input", { type: "text", id: "username", autocomplete: "username", autocapitalize: "none",
-    spellcheck: "false", required: true, inputmode: "text" });
+    spellcheck: "false", required: true, inputmode: "text", placeholder: "mis. ahmad" });
   const pin = el("input", { type: "password", id: "pin", autocomplete: "current-password", inputmode: "numeric",
-    required: true, minlength: "6" });
-  const msg = el("div");
-  const btn = el("button", { class: "btn", type: "submit" }, "Masuk");
-  const form = el("form", { class: "card", novalidate: true },
+    required: true, minlength: "6", placeholder: "••••••" });
+  const reveal = el("button", { class: "btn btn-link", type: "button", "aria-controls": "pin", "aria-pressed": "false" }, "Lihat");
+  reveal.addEventListener("click", () => {
+    const show = pin.type === "password";
+    pin.type = show ? "text" : "password";
+    reveal.textContent = show ? "Sembunyi" : "Lihat";
+    reveal.setAttribute("aria-pressed", String(show));
+    pin.focus();
+  });
+  const msg = el("div", { "aria-live": "polite" });
+  const btn = el("button", { class: "btn btn-lg", type: "submit" }, "Masuk");
+  const form = el("form", { class: "card login-card", novalidate: true },
     el("label", { for: "username" }, "Username"), user,
-    el("label", { for: "pin" }, "PIN"), pin,
+    el("label", { for: "pin" }, "PIN"), el("div", { class: "pin-wrap" }, pin, reveal),
     msg, el("div", { class: "stack" }, btn));
+  const invalid = (on) => {
+    user.setAttribute("aria-invalid", String(on && !user.value.trim()));
+    pin.setAttribute("aria-invalid", String(on && pin.value.length < 6));
+  };
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clear(msg);
     if (!user.value.trim() || pin.value.length < 6) {
-      msg.append(el("div", { class: "alert alert-err" }, "Isi username dan PIN (minimal 6 karakter)."));
+      invalid(true);
+      msg.append(el("div", { class: "alert alert-err" }, "Isi username dan PIN (minimal 6 angka)."));
+      haptic([20, 40, 20]);
       return;
     }
-    btn.disabled = true;
+    invalid(false);
+    busy(btn, true);
     try {
       const r = await api("/api/auth/login", { method: "POST", auth: false,
         body: { username: user.value.trim(), pin: pin.value } });
@@ -117,31 +140,39 @@ function pageLogin() {
       go("/");
     } catch (err) {
       msg.append(errorBox(err));
+      haptic([20, 40, 20]);
     } finally {
-      btn.disabled = false;
+      busy(btn, false);
     }
   });
-  view(el("div", { class: "login-wrap" },
-    el("img", { class: "logo", src: "icons/icon-192.png", alt: "" }),
-    el("h1", { class: "center" }, "Absensi Guru"),
-    el("p", { class: "muted center" }, "Masuk dengan username & PIN dari admin."),
-    form));
+  view(
+    el("div", { class: "login-hero" }, khatam("mark"),
+      el("h1", {}, "Absensi Guru"),
+      el("p", {}, "Masuk dengan username dan PIN dari admin.")),
+    form);
   user.focus();
 }
 
 // --- halaman: Beranda --------------------------------------------------------
 
-function sessionRow(s) {
+function sessionItem(s) {
+  let cls = "";
   let pill;
+  let meta;
   if (s.attended) {
-    pill = el("span", { class: "pill " + (s.status === "late" ? "pill-late" : "pill-ok") },
-      `Hadir ${s.time_hhmm} · ${statusText(s.status, s.late_min)}`);
+    cls = "done" + (s.status === "late" ? " late" : "");
+    pill = el("span", { class: "pill " + (s.status === "late" ? "pill-late" : "pill-ok") }, statusText(s.status, s.late_min));
+    meta = `Hadir ${s.time_hhmm} WIB`;
   } else if (s.is_open) {
-    pill = el("span", { class: "pill pill-open" }, "Dibuka — silakan scan");
+    cls = "open";
+    pill = el("span", { class: "pill pill-open" }, "Dibuka");
+    meta = "Silakan scan sekarang";
   } else {
     pill = el("span", { class: "pill pill-idle" }, "Belum hadir");
+    meta = "Menunggu sesi dibuka";
   }
-  return el("div", { class: "sess" }, el("span", { class: "name" }, s.name), pill);
+  return el("li", { class: cls }, el("span", { class: "node", "aria-hidden": "true" }),
+    el("div", {}, el("div", { class: "name" }, s.name), el("div", { class: "meta" }, meta)), pill);
 }
 
 function installCard() {
@@ -149,51 +180,100 @@ function installCard() {
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   if (standalone) return null;
   if (state.installEvt) {
-    return el("div", { class: "card" }, el("p", {}, "Pasang aplikasi ini di layar utama agar mudah dibuka."),
-      el("button", { class: "btn btn-ghost", onclick: async () => {
+    return el("div", { class: "card install" }, el("p", {}, "Pasang di layar utama agar sekali ketuk langsung terbuka."),
+      el("button", { class: "btn btn-ghost btn-sm", onclick: async () => {
         state.installEvt.prompt();
         await state.installEvt.userChoice.catch(() => {});
         state.installEvt = null;
         render();
-      } }, "Pasang Aplikasi"));
+      } }, icon("install"), "Pasang"));
   }
   if (isIos) {
     return el("p", { class: "muted small center" },
-      "Tip iPhone: buka di Safari → tombol Bagikan → “Tambahkan ke Layar Utama”.");
+      "Tip iPhone: buka di Safari, ketuk Bagikan, lalu “Tambahkan ke Layar Utama”.");
   }
   return null;
 }
 
+function greeting() {
+  return "Assalamu’alaikum,";
+}
+
+function liveClock() {
+  const hm = el("span", {});
+  const sec = el("span", { class: "sec" });
+  const time = el("span", { class: "time", role: "timer", "aria-label": "Jam sekarang (WIB)" }, hm, sec);
+  const tick = () => {
+    const p = wibParts(new Date());
+    hm.textContent = `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
+    sec.textContent = `:${String(p.ss).padStart(2, "0")}`;
+  };
+  tick();
+  const t = setInterval(tick, 1000);
+  state.cleanup.push(() => clearInterval(t));
+  return el("div", { class: "clock" }, time, el("span", { class: "tz" }, "WIB"),
+    el("span", { class: "day" }, tanggal(todayWib(), true)));
+}
+
+function homeHero() {
+  return el("header", { class: "hero" },
+    el("div", { class: "hero-top" },
+      el("div", {}, el("p", { class: "greet" }, greeting()),
+        el("p", { class: "name" }, state.user ? state.user.name : "")),
+      el("button", { class: "btn btn-link", onclick: logout }, icon("logout"), "Keluar")),
+    liveClock());
+}
+
+function scanButton(hint) {
+  return el("div", { class: "scan-wrap" },
+    el("button", { class: "scan-cta", onclick: () => { haptic(15); go("/scan"); } },
+      khatam("halo"), khatam("khatam"),
+      el("span", { class: "label" }, icon("qr"), "Scan Absen")),
+    hint ? el("p", { class: "scan-hint" }, hint) : null);
+}
+
 async function pageHome() {
-  view(topbar(), loading());
+  // Kerangka langsung tampil (jam & tombol scan); data bulan menyusul.
+  const body = el("div", {}, loading("Memuat ringkasan…"));
+  const renderShell = () => view(homeHero(), scanButton(null), body);
+  if (state.user) renderShell(); // saat pertama buka, layar pembuka tetap tampil sampai profil dimuat
   try {
     await ensureUser();
+    if (!root.contains(body)) renderShell();
     const s = await api("/api/me/summary");
     const rate = s.current_rate === null ? "Belum diatur" : rupiah(s.current_rate);
-    view(
-      topbar(),
-      el("section", { class: "card" },
-        el("div", { class: "card-title" }, "Absensi hari ini"),
-        el("div", { class: "sessions" }, s.today.sessions.map(sessionRow))),
-      el("button", { class: "btn btn-xl", onclick: () => go("/scan") }, "Scan Absen"),
-      el("section", { class: "card" },
-        el("div", { class: "card-title" }, `Bulan ${s.period_label}`),
+    const open = s.today.sessions.find((x) => x.is_open && !x.attended);
+    const hint = root.querySelector(".scan-wrap");
+    if (hint && open) hint.append(el("p", { class: "scan-hint" }, `${open.name} sedang dibuka`));
+    const earn = el("div", { class: "v" }, rupiah(0));
+    const meetings = el("div", { class: "v" }, "0");
+    body.replaceChildren(
+      el("section", { class: "card enter" },
+        el("div", { class: "card-title" }, "Hari ini", el("span", { class: "sub" }, tanggalPendek(todayWib()))),
+        s.today.sessions.length
+          ? el("ol", { class: "timeline" }, s.today.sessions.map(sessionItem))
+          : emptyState("Tidak ada sesi hari ini.")),
+      el("section", { class: "card enter" },
+        el("div", { class: "card-title" }, `Bulan ${s.period_label}`,
+          el("span", { class: "sub" }, s.period_status === "final" ? "Final" : "Berjalan")),
+        el("div", { class: "earn" }, el("span", { class: "k" }, "Estimasi gaji saat ini"), earn,
+          el("span", { class: "note" },
+            s.period_status === "final" ? "Periode sudah ditutup admin." : "Angka final setelah admin menutup periode.")),
         el("div", { class: "stats" },
-          el("div", { class: "stat" }, el("div", { class: "k" }, "Pertemuan"), el("div", { class: "v" }, s.meetings)),
-          el("div", { class: "stat" }, el("div", { class: "k" }, "Tarif/pertemuan"), el("div", { class: "v" }, rate)),
-          el("div", { class: "stat wide" }, el("div", { class: "k" }, "Estimasi gaji saat ini"),
-            el("div", { class: "v big" }, rupiah(s.estimated_gross)),
-            el("div", { class: "muted small" },
-              s.period_status === "final" ? "Periode sudah final." : "Estimasi, final setelah periode ditutup admin."))),
-        el("div", { class: "k muted small" }, "Tanggal hadir:"),
+          el("div", { class: "stat" }, el("div", { class: "k" }, "Pertemuan"), meetings),
+          el("div", { class: "stat" }, el("div", { class: "k" }, "Tarif per pertemuan"), el("div", { class: "v" }, rate))),
+        el("div", { class: "dates-k" }, "Tanggal hadir"),
         s.dates.length
           ? el("div", { class: "dates" }, s.dates.map((d) => el("span", { class: "date-chip" }, tanggalPendek(d))))
           : el("p", { class: "muted small" }, "Belum ada kehadiran bulan ini.")),
-      el("button", { class: "btn btn-ghost", onclick: () => go("/riwayat") }, "Lihat Riwayat"),
+      el("button", { class: "btn btn-ghost", onclick: () => go("/riwayat") }, icon("history"), "Lihat riwayat"),
       installCard(),
     );
+    countUp(earn, s.estimated_gross, rupiah);
+    countUp(meetings, s.meetings);
   } catch (err) {
-    view(topbar(), errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
+    if (!state.user) { view(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi")); return; }
+    body.replaceChildren(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
   }
 }
 
@@ -241,30 +321,32 @@ function scanErrorView(err) {
 
 async function pageScan() {
   if (!navigator.onLine) {
-    view(topbar(true), el("div", { class: "alert alert-err" }, "Butuh koneksi internet untuk absen."));
+    view(topbar(true), el("div", { class: "alert alert-err" }, "Tidak ada internet. Sambungkan dulu, lalu scan."));
     return;
   }
   const video = el("video", { playsinline: true, muted: true, "aria-label": "Kamera" });
-  const geoDot = el("span", { class: "dot" });
+  const geoDot = el("span", { class: "dot wait" });
   const geoText = el("span", {}, "Mencari lokasi…");
-  const camDot = el("span", { class: "dot" });
+  const camDot = el("span", { class: "dot wait" });
   const camText = el("span", {}, "Membuka kamera…");
   const msg = el("div");
   const camMsg = el("div");
   const geoMsg = el("div");
   const retry = el("button", { class: "btn hidden", onclick: () => render() }, "Coba lagi");
-  const scannerBox = el("div", { class: "scanner" }, video, el("div", { class: "frame" }));
+  const scannerBox = el("div", { class: "scanner idle" }, video,
+    el("div", { class: "frame" }, el("i"), el("i"), el("i"), el("i")), el("div", { class: "beam" }));
   const devPanel = el("div");
   view(topbar(true),
-    el("h1", {}, "Scan QR Absen"),
-    el("p", { class: "muted" }, "Arahkan kamera ke QR di layar admin."),
+    el("div", { class: "page-head" }, el("h1", {}, "Scan QR absen"),
+      el("p", {}, "Arahkan kamera ke QR di layar admin. Absen tercatat otomatis.")),
     scannerBox,
-    el("div", { class: "status-line" }, camDot, camText),
-    el("div", { class: "status-line" }, geoDot, geoText),
+    el("div", { class: "status-list" },
+      el("div", { class: "status-line" }, camDot, camText),
+      el("div", { class: "status-line" }, geoDot, geoText)),
     camMsg, geoMsg, msg, retry, devPanel);
 
   let lastPos = null;
-  let busy = false;
+  let busyScan = false;
   let alive = true;
   state.cleanup.push(() => { alive = false; });
 
@@ -295,14 +377,17 @@ async function pageScan() {
   }
 
   async function submitScan(token, coords) {
-    busy = true;
-    clear(msg).append(loading("Memverifikasi…"));
+    busyScan = true;
+    clear(msg).append(el("div", { class: "verify", role: "status" }, bars(5, { label: "" }),
+      el("strong", {}, "Memverifikasi QR & lokasi…"), el("span", { class: "small" }, "Jangan tutup halaman ini.")));
     try {
       const r = await api("/api/attendance/scan", { method: "POST", body: { token, ...coords, client_ts: Date.now() } });
       state.scan = r;
       sessionStorage.setItem(SCAN_KEY, JSON.stringify(r));
+      haptic(30);
       go("/konfirmasi");
     } catch (err) {
+      haptic([20, 40, 20]);
       clear(msg).append(scanErrorView(err));
       if (err instanceof ApiError && err.code === "ALREADY_ATTENDED") {
         msg.append(el("button", { class: "btn", onclick: () => go("/") }, "Ke Beranda"));
@@ -310,13 +395,14 @@ async function pageScan() {
         retry.classList.remove("hidden");
       }
     } finally {
-      busy = false;
+      busyScan = false;
     }
   }
 
   async function onCode(text) {
-    if (busy || !alive) return;
+    if (busyScan || !alive) return;
     stopCam?.();
+    haptic(15);
     camDot.className = "dot ok";
     camText.textContent = "QR terbaca";
     scannerBox.classList.add("hidden");
@@ -339,6 +425,7 @@ async function pageScan() {
     stopCam = await startScanner(video, onCode);
     if (!alive) { stopCam(); return; }
     state.cleanup.push(() => stopCam && stopCam());
+    scannerBox.classList.remove("idle");
     camDot.className = "dot ok";
     camText.textContent = "Kamera aktif — arahkan ke QR";
   } catch (e) {
@@ -361,7 +448,7 @@ async function pageScan() {
     const lat = el("input", { type: "number", step: "any", value: String(state.devFake.lat ?? "") });
     const lng = el("input", { type: "number", step: "any", value: String(state.devFake.lng ?? "") });
     devPanel.append(el("section", { class: "card dev" },
-      el("strong", {}, "MODE DEV — lokasi palsu"),
+      el("strong", {}, "Mode dev — lokasi palsu"),
       el("p", { class: "small" }, "Hanya muncul di localhost dengan server ENV=dev."),
       el("div", { class: "row" }, el("div", {}, el("label", {}, "Lat"), lat), el("div", {}, el("label", {}, "Lng"), lng)),
       el("button", { class: "btn btn-ghost", onclick: async () => {
@@ -374,22 +461,23 @@ async function pageScan() {
         } catch (err) {
           clear(msg).append(errorBox(err));
         }
-      } }, "Absen pakai token QR aktif (DEV)")));
+      } }, "Absen pakai token QR aktif (dev)")));
   }
 }
 
 // --- halaman: Konfirmasi (pilih kelas & mapel) -------------------------------
 
-function chipGroup(items, selected, onPick) {
+function chipGroup(label, items, selected, onPick) {
   const buttons = items.map((name) => el("button", {
     class: "chip", type: "button", "aria-pressed": String(name === selected),
     onclick: () => {
       for (const b of buttons) b.setAttribute("aria-pressed", String(b === btnMap.get(name)));
+      haptic(8);
       onPick(name);
     },
   }, name));
   const btnMap = new Map(items.map((n, i) => [n, buttons[i]]));
-  return el("div", { class: "chips", role: "group" }, buttons);
+  return el("div", { class: "chips", role: "group", "aria-label": label }, buttons);
 }
 
 async function pageConfirm() {
@@ -400,39 +488,44 @@ async function pageConfirm() {
   if (!scan || new Date(scan.expires_at).getTime() < Date.now()) {
     sessionStorage.removeItem(SCAN_KEY);
     view(topbar(true), el("div", { class: "alert alert-err" }, "Waktu memilih kelas habis. Silakan scan ulang."),
-      el("button", { class: "btn", onclick: () => go("/scan") }, "Scan ulang"));
+      el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan ulang"));
     return;
   }
   view(topbar(true), loading());
   let meta;
-  try { meta = await ensureMeta(); } catch (err) { view(topbar(true), errorBox(err)); return; }
+  try { meta = await ensureMeta(); } catch (err) { view(SAME, topbar(true), errorBox(err)); return; }
   let last = {};
   try { last = JSON.parse(localStorage.getItem(LAST_CHOICE_KEY) || "{}"); } catch { /* abaikan */ }
   let kelas = meta.kelas.includes(last.kelas) ? last.kelas : null;
   let mapel = meta.mapel.includes(last.mapel) ? last.mapel : null;
   const msg = el("div");
-  const save = el("button", { class: "btn btn-xl", disabled: !(kelas && mapel) }, "Simpan Absen");
+  const save = el("button", { class: "btn btn-xl", disabled: !(kelas && mapel) }, icon("check"), "Simpan absen");
   const refresh = () => { save.disabled = !(kelas && mapel); };
   const countdown = el("span", {});
+  const timerPill = el("span", { class: "timer" }, icon("clock"), countdown);
   const tick = () => {
     const left = Math.max(0, Math.floor((new Date(scan.expires_at).getTime() - Date.now()) / 1000));
-    countdown.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    countdown.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} tersisa`;
+    timerPill.classList.toggle("low", left <= 30);
     if (left <= 0) render();
   };
   tick();
   const timer = setInterval(tick, 1000);
   const late = scan.status_preview === "late";
-  view(topbar(true),
-    el("section", { class: "alert " + (late ? "alert-warn" : "alert-ok") },
-      el("h3", {}, `QR valid — ${scan.session.name}`),
-      el("p", {}, `Jam hadir ${hhmm(scan.scanned_at)} WIB · ${statusText(scan.status_preview, scan.late_min_preview)}`),
-      el("p", { class: "small" }, "Jam hadir dihitung saat scan, bukan saat menyimpan. Sisa waktu memilih: ", countdown)),
-    el("h2", {}, "Kelas"), chipGroup(meta.kelas, kelas, (v) => { kelas = v; refresh(); }),
-    el("h2", { class: "pad-top" }, "Mata pelajaran"), chipGroup(meta.mapel, mapel, (v) => { mapel = v; refresh(); }),
-    msg, el("div", { class: "card" }, save));
+  view(SAME, topbar(true),
+    el("section", { class: "ticket" + (late ? " late" : "") },
+      el("h3", {}, `QR valid · ${scan.session.name}`),
+      el("p", {}, `Jam hadir ${hhmm(scan.scanned_at)} WIB — ${statusText(scan.status_preview, scan.late_min_preview)}`),
+      el("p", { class: "small" }, "Jam hadir dihitung saat scan, bukan saat menyimpan."),
+      timerPill),
+    el("h2", { class: "section-h" }, "Kelas", el("span", { class: "sub" }, "Pilih satu")),
+    chipGroup("Kelas", meta.kelas, kelas, (v) => { kelas = v; refresh(); }),
+    el("h2", { class: "section-h" }, "Mata pelajaran", el("span", { class: "sub" }, "Pilih satu")),
+    chipGroup("Mata pelajaran", meta.mapel, mapel, (v) => { mapel = v; refresh(); }),
+    msg, el("div", { class: "save-bar" }, save));
   state.cleanup.push(() => clearInterval(timer));
   save.addEventListener("click", async () => {
-    save.disabled = true;
+    busy(save, true);
     clear(msg);
     try {
       const r = await api("/api/attendance/submit", { method: "POST", body: { ticket: scan.ticket, kelas, mapel } });
@@ -440,15 +533,18 @@ async function pageConfirm() {
       sessionStorage.removeItem(SCAN_KEY);
       state.scan = null;
       state.result = r;
+      haptic([30, 60, 30]);
       go("/selesai");
     } catch (err) {
+      busy(save, false);
+      haptic([20, 40, 20]);
       msg.append(errorBox(err));
       if (err instanceof ApiError && ["TICKET_EXPIRED", "TICKET_INVALID"].includes(err.code)) {
-        msg.append(el("button", { class: "btn", onclick: () => go("/scan") }, "Scan ulang"));
+        save.disabled = true;
+        msg.append(el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan ulang"));
       } else if (err instanceof ApiError && err.code === "ALREADY_ATTENDED") {
+        save.disabled = true;
         msg.append(el("button", { class: "btn", onclick: () => go("/") }, "Ke Beranda"));
-      } else {
-        save.disabled = false;
       }
     }
   });
@@ -461,10 +557,13 @@ function pageDone() {
   if (!r) { go("/"); return; }
   const late = r.status === "late";
   view(topbar(true),
-    el("div", { class: "result-icon" + (late ? " late" : ""), "aria-hidden": "true" }, late ? "!" : "✓"),
-    el("h1", { class: "center" }, "Absensi tersimpan"),
-    el("p", { class: "center muted" }, statusText(r.status, r.late_min)),
-    el("section", { class: "card" }, el("dl", { class: "kv" },
+    el("div", { class: "done" },
+      el("div", { class: "badge" + (late ? " late" : ""), "aria-hidden": "true" },
+        el("span", { class: "ring" }), khatam(),
+        late ? el("span", { class: "bang" }, "!") : icon("check", "mark")),
+      el("h1", {}, "Absensi tersimpan"),
+      el("p", { class: "status" }, `${statusText(r.status, r.late_min)} · ${r.time_hhmm} WIB`)),
+    el("section", { class: "card receipt" }, el("dl", { class: "kv" },
       el("dt", {}, "Tanggal"), el("dd", {}, tanggal(r.date, true)),
       el("dt", {}, "Sesi"), el("dd", {}, r.session_name || r.code),
       el("dt", {}, "Jam hadir"), el("dd", {}, `${r.time_hhmm} WIB`),
@@ -479,30 +578,33 @@ function pageDone() {
 async function pageHistory() {
   const p = new URLSearchParams(location.hash.split("?")[1] || "");
   const month = /^\d{4}-\d{2}$/.test(p.get("m") || "") ? p.get("m") : periodNow();
-  view(topbar(true), loading());
+  const nav = el("div", { class: "month-nav" },
+    el("button", { class: "btn btn-ghost", "aria-label": "Bulan sebelumnya",
+      onclick: () => go(`/riwayat?m=${shiftPeriod(month, -1)}`) }, icon("back")),
+    el("h2", {}, periode(month)),
+    el("button", { class: "btn btn-ghost", "aria-label": "Bulan berikutnya", disabled: month >= periodNow(),
+      onclick: () => go(`/riwayat?m=${shiftPeriod(month, 1)}`) }, icon("next")));
+  view(topbar(true), nav, loading());
   try {
     const s = await api(`/api/me/summary?month=${encodeURIComponent(month)}`);
-    const nav = el("div", { class: "month-nav" },
-      el("button", { class: "btn btn-ghost", onclick: () => go(`/riwayat?m=${shiftPeriod(month, -1)}`) }, "‹"),
-      el("h2", {}, periode(month)),
-      el("button", { class: "btn btn-ghost", disabled: month >= periodNow(),
-        onclick: () => go(`/riwayat?m=${shiftPeriod(month, 1)}`) }, "›"));
     const items = s.attendance.map((a) => el("li", {},
-      el("div", {}, el("div", {}, `${tanggal(a.date, true)}`),
+      el("div", {}, el("div", { class: "when" }, tanggal(a.date, true)),
         el("div", { class: "sub" }, `${a.code} · ${a.time_hhmm} · ${a.kelas} · ${a.mapel}`)),
-      el("div", { class: "center" },
+      el("div", { class: "end" },
         el("span", { class: "pill " + (a.status === "late" ? "pill-late" : "pill-ok") },
           a.status === "late" ? `Telat ${a.late_min}m` : "Tepat"),
-        el("div", { class: "sub" }, rupiah(a.rate_snapshot)))));
-    view(topbar(true), nav,
-      el("section", { class: "card" }, el("div", { class: "stats" },
+        el("span", { class: "amt" }, rupiah(a.rate_snapshot)))));
+    const gross = el("div", { class: "v" }, rupiah(0));
+    view(SAME, topbar(true), nav,
+      el("section", { class: "card enter" }, el("div", { class: "stats" },
         el("div", { class: "stat" }, el("div", { class: "k" }, "Pertemuan"), el("div", { class: "v" }, s.meetings)),
         el("div", { class: "stat" }, el("div", { class: "k" }, s.period_status === "final" ? "Gaji (final)" : "Estimasi gaji"),
-          el("div", { class: "v" }, rupiah(s.estimated_gross))))),
-      el("section", { class: "card" }, items.length ? el("ul", { class: "list" }, items)
-        : el("p", { class: "muted" }, "Tidak ada kehadiran pada bulan ini.")));
+          gross))),
+      el("section", { class: "card enter" }, items.length ? el("ul", { class: "list" }, items)
+        : emptyState("Tidak ada kehadiran pada bulan ini.")));
+    countUp(gross, s.estimated_gross, rupiah);
   } catch (err) {
-    view(topbar(true), errorBox(err));
+    view(SAME, topbar(true), nav, errorBox(err));
   }
 }
 
@@ -523,6 +625,7 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); stat
 
 async function boot() {
   updateOnline();
+  installRipple(".btn, .chip");
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (getToken()) warmUp(); // bangunkan API Render lebih awal
   if (["localhost", "127.0.0.1"].includes(location.hostname)) {

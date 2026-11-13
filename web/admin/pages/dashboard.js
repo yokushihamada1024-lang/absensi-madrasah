@@ -2,9 +2,21 @@ import { api } from "../shared/api.js";
 import { tanggal, todayWib } from "../shared/format.js";
 import { go, mount, onLeave, refresh } from "../app.js";
 import { alertBox, el, loading, statusPill, table } from "../ui.js";
+import { countUp } from "../shared/fx.js";
+
+// Angka hanya dianimasikan saat nilainya berubah — segar otomatis tiap menit tidak membuatnya berkedip.
+const shown = new Map();
+function counter(key, n, suffix = "") {
+  const v = el("div", { class: "v" });
+  const fmt = (x) => `${Math.round(x)}${suffix}`;
+  if (shown.get(key) === n) v.textContent = fmt(n);
+  else countUp(v, n, fmt);
+  shown.set(key, n);
+  return v;
+}
 
 export async function pageDashboard() {
-  mount(el("h1", {}, "Dashboard Hari Ini"), loading());
+  mount(el("h1", {}, "Hari ini"), loading());
   const today = todayWib();
   const [sess, att, attempts] = await Promise.all([
     api("/api/admin/sessions/today"),
@@ -14,19 +26,19 @@ export async function pageDashboard() {
   const cards = sess.sessions.map((s) => {
     const open = s.session?.is_open;
     const state = !s.session ? el("span", { class: "pill pill-idle" }, "Belum dibuka")
-      : open ? el("span", { class: "pill pill-info" }, "Terbuka") : el("span", { class: "pill pill-idle" }, "Ditutup");
+      : open ? el("span", { class: "pill pill-info live" }, "Terbuka") : el("span", { class: "pill pill-idle" }, "Ditutup");
     return el("div", { class: "card stat" },
       el("div", { class: "k" }, `${s.name} (${s.start_hhmm}–${s.end_hhmm})`),
-      el("div", { class: "v" }, `${s.attended} hadir`), state);
+      counter(s.code, s.attended, " hadir"), state);
   });
   mount(
-    el("h1", {}, "Dashboard Hari Ini"),
+    el("h1", {}, "Hari ini"),
     el("p", { class: "muted" }, tanggal(today, true)),
     sess.location_set ? null : alertBox("warn", "Koordinat madrasah belum diisi — sesi tidak bisa dibuka. ",
       el("a", { href: "#/pengaturan" }, "Buka Pengaturan")),
     el("div", { class: "grid grid-3" }, ...cards,
       el("div", { class: "card stat" }, el("div", { class: "k" }, "Percobaan gagal hari ini"),
-        el("div", { class: "v" }, attempts.length),
+        counter("_attempts", attempts.length),
         el("a", { href: "#/log" }, "Lihat log"))),
     el("div", { class: "toolbar" }, el("button", { class: "btn btn-lg", onclick: () => go("/sesi") }, "Buka layar Sesi & QR")),
     el("h2", {}, "Sudah absen hari ini"),

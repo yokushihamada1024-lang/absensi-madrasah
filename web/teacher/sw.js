@@ -1,8 +1,8 @@
 // Service worker: HANYA meng-cache app shell. Tidak pernah meng-cache API (/api/*, /healthz, origin lain).
-const CACHE = "absensi-guru-shell-v1";
+const CACHE = "absensi-guru-shell-v2";
 const SHELL = [
   "./", "index.html", "app.js", "scanner.js", "styles.css", "config.js", "manifest.webmanifest",
-  "shared/api.js", "shared/format.js",
+  "shared/api.js", "shared/format.js", "shared/fx.js", "shared/base.css",
   "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png",
   "vendor/qr-scanner/qr-scanner.min.js", "vendor/qr-scanner/qr-scanner-worker.min.js",
 ];

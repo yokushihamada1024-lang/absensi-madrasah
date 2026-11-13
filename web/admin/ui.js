@@ -1,8 +1,9 @@
 // Helper UI admin (DOM API saja; teks dari server selalu text node).
 import { ApiError } from "./shared/api.js";
 import { clear, el } from "./shared/format.js";
+import { busy, loadingBlock } from "./shared/fx.js";
 
-export { clear, el };
+export { busy, clear, el };
 
 const dialog = document.getElementById("dialog");
 const toastEl = document.getElementById("toast");
@@ -12,6 +13,8 @@ export function toast(message, isError = false) {
   toastEl.textContent = message;
   toastEl.className = "toast" + (isError ? " err" : "");
   toastEl.hidden = false;
+  void toastEl.offsetWidth; // ulang animasi masuk bila toast sebelumnya masih tampil
+  toastEl.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, isError ? 7000 : 3500);
 }
@@ -29,7 +32,7 @@ export function alertBox(kind, ...children) {
 }
 
 export function loading(text = "Memuat…") {
-  return el("p", { class: "muted" }, el("span", { class: "spinner" }), " ", text);
+  return loadingBlock(text);
 }
 
 /** Tabel: columns = [{label, render(row) -> Node|string, class}], rows = array. */

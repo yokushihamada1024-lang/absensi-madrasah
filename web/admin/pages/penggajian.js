@@ -2,7 +2,7 @@
 import { api, download } from "../shared/api.js";
 import { periode, periodNow, rupiah, shiftPeriod } from "../shared/format.js";
 import { mount, refresh } from "../app.js";
-import { askReason, confirmDialog, el, input, loading, table, toast, toastErr } from "../ui.js";
+import { askReason, busy, confirmDialog, el, input, loading, table, toast, toastErr } from "../ui.js";
 
 function currentPeriod() {
   const p = new URLSearchParams(location.hash.split("?")[1] || "").get("p");
@@ -10,13 +10,13 @@ function currentPeriod() {
 }
 
 async function dl(btn, path, filename) {
-  btn.disabled = true;
+  busy(btn, true);
   try {
     await download(path, filename);
   } catch (err) {
     toastErr(err);
   } finally {
-    btn.disabled = false;
+    busy(btn, false);
   }
 }
 

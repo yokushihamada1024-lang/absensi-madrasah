@@ -2,7 +2,7 @@
 import { api } from "../shared/api.js";
 import { hhmm, tanggal, todayWib } from "../shared/format.js";
 import { mount, onLeave, refresh } from "../app.js";
-import { alertBox, confirmDialog, el, loading, statusPill, table, toast, toastErr } from "../ui.js";
+import { alertBox, busy, confirmDialog, el, loading, statusPill, table, toast, toastErr } from "../ui.js";
 
 export async function pageSesi() {
   mount(el("h1", {}, "Sesi & QR"), loading());
@@ -13,14 +13,14 @@ export async function pageSesi() {
   const rows = data.sessions.map((s) => {
     const btn = el("button", { class: "btn btn-lg", disabled: !data.location_set }, `Mulai ${s.name}`);
     btn.addEventListener("click", async () => {
-      btn.disabled = true;
+      busy(btn, true);
       try {
         await api("/api/admin/sessions/open", { method: "POST", body: { code: s.code } });
         toast(`${s.name} dibuka.`);
         refresh();
       } catch (err) {
         toastErr(err);
-        btn.disabled = false;
+        busy(btn, false);
       }
     });
     const info = s.session ? `Ditutup ${s.session.closed_at ? hhmm(s.session.closed_at) : ""} · ${s.attended} hadir` : "Belum dibuka";
@@ -43,7 +43,10 @@ function showQr(item) {
   const countdown = el("span", { class: "countdown" }, "–");
   const conn = el("span", { class: "conn" }, "Menghubungkan…");
   const wake = el("span", { class: "muted small" }, "");
-  box.append(el("div", { class: "qr-meta" }, el("span", {}, "QR berganti dalam ", countdown), conn));
+  const bar = el("span");
+  box.append(el("div", { class: "qr-progress", "aria-hidden": "true" }, bar),
+    el("div", { class: "qr-meta" }, el("span", {}, "QR berganti dalam ", countdown), conn));
+  let period = 0; // lama berlaku QR (ms), untuk bilah progres
   const listWrap = el("div", {}, loading());
   const closeBtn = el("button", { class: "btn btn-danger" }, "Tutup Sesi");
   const fsBtn = el("button", { class: "btn btn-ghost" }, "Layar penuh");
@@ -74,6 +77,10 @@ function showQr(item) {
       if (!alive) return;
       offset = new Date(q.server_time).getTime() - Date.now();
       expiresAt = new Date(q.expires_at).getTime();
+      period = Math.max(1000, expiresAt - (Date.now() + offset));
+      img.classList.remove("swap");
+      void img.offsetWidth;
+      img.classList.add("swap");
       const url = URL.createObjectURL(new Blob([q.svg], { type: "image/svg+xml" }));
       img.src = url;
       if (lastUrl) URL.revokeObjectURL(lastUrl);
@@ -95,6 +102,7 @@ function showQr(item) {
     if (!expiresAt) return;
     const left = Math.max(0, Math.ceil((expiresAt - (Date.now() + offset)) / 1000));
     countdown.textContent = `${left} dtk`;
+    if (period) bar.style.setProperty("--p", String(Math.max(0, Math.min(1, (expiresAt - (Date.now() + offset)) / period))));
     // Watchdog: QR di layar sudah lewat masa berlakunya tapi belum ada yang baru.
     if (Date.now() + offset > expiresAt + 3000 && !failing) setConn(false, "Koneksi terputus — QR mungkin basi");
   }, 250);

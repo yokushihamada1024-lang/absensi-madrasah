@@ -1,7 +1,7 @@
 // Pengaturan: nama madrasah, titik lokasi (peta OpenStreetMap + GPS + manual), radius, jam sesi, kelas, mapel.
 import { api } from "../shared/api.js";
 import { mount, onLeave, refresh } from "../app.js";
-import { alertBox, confirmDialog, el, field, input, loading, table, toast, toastErr } from "../ui.js";
+import { alertBox, busy, confirmDialog, el, field, input, loading, table, toast, toastErr } from "../ui.js";
 
 const DEFAULT_CENTER = [-2.5, 118]; // Indonesia, jika koordinat belum diisi
 
@@ -105,7 +105,7 @@ function settingsCard(s) {
     const la = num(lat.value);
     const lo = num(lng.value);
     if ((la === null) !== (lo === null)) { toast("Latitude dan longitude harus diisi berdua.", true); return; }
-    save.disabled = true;
+    busy(save, true);
     try {
       await api("/api/admin/settings", { method: "PUT", body: {
         madrasah_name: name.value.trim(), lat: la, lng: lo, radius_m: num(radius.value), max_accuracy_m: num(acc.value),
@@ -115,7 +115,7 @@ function settingsCard(s) {
     } catch (err) {
       toastErr(err);
     } finally {
-      save.disabled = false;
+      busy(save, false);
     }
   });
   onLeave(() => { if (map) map.remove(); });
