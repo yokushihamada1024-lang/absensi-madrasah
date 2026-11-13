@@ -211,7 +211,7 @@ input[type=text], input[type=password], input[type=number], select { padding: 13
   background: linear-gradient(180deg, rgba(244, 246, 250, 0), var(--paper) 30%); }
 
 /* ---------- Selesai: momen puncak ---------- */
-.done { text-align: center; padding-top: 8px; }
+div.done { text-align: center; padding-top: 8px; }
 .badge { position: relative; width: 132px; height: 132px; margin: 18px auto 18px; display: grid; place-items: center; color: #fff; }
 .badge .khatam { position: absolute; inset: 0; width: 100%; height: 100%; animation: pop 520ms var(--ease-spring) both; }
 .badge .khatam rect { fill: var(--ok); }
@@ -225,8 +225,8 @@ input[type=text], input[type=password], input[type=number], select { padding: 13
 .badge .mark path { stroke-dasharray: 30; stroke-dashoffset: 30; animation: draw 420ms 320ms var(--ease-out) forwards; }
 .badge .bang { position: relative; font-size: 3rem; font-weight: 800; line-height: 1; animation: fade 300ms 300ms both; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-.done h1 { font-size: 1.6rem; animation: rise var(--dur-3) 180ms var(--ease-out) both; }
-.done .status { color: var(--muted); margin-bottom: 4px; animation: rise var(--dur-3) 240ms var(--ease-out) both; }
+div.done h1 { font-size: 1.6rem; animation: rise var(--dur-3) 180ms var(--ease-out) both; }
+div.done .status { color: var(--muted); margin-bottom: 4px; animation: rise var(--dur-3) 240ms var(--ease-out) both; }
 .receipt { text-align: left; animation: rise var(--dur-3) 300ms var(--ease-out) both; }
 dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 0; margin: 0; }
 dl.kv dt, dl.kv dd { padding: 9px 0; border-bottom: 1px dashed var(--line); }
