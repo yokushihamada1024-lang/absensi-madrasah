@@ -41,6 +41,11 @@ Catatan keputusan teknis. Setiap poin yang tidak ditentukan oleh `PROMPT.md`, at
 | D25 | Lapisan repository | `core/repo/base.py` = interface per entitas (`UserRepo`, `AttendanceRepo`, …) dalam satu kontainer `Repository`. Implementasi entitas generik di `core/repo/tables.py` berjalan di atas *table backend* (`memory.py` = list di memori, `sheets.py` = gspread). Migrasi ke Postgres cukup mengimplementasikan interface entitas langsung. | Menghindari duplikasi logika antara InMemory dan Sheets. |
 | D26 | Endpoint tambahan kecil | `GET /api/healthz` alias tidak ditambah; `GET /healthz` di root. Ditambah `GET /api/admin/sessions/{id}/attendance` tidak perlu — daftar yang baru absen diambil dari `GET /admin/attendance?date=`. | Tetap di dalam spesifikasi. |
 
+| D27 | Kolom tambahan `attempts.detail` | Tab `attempts` diberi kolom ke-7 `detail` (JSON: umur posisi, selisih jam HP, sub-alasan). `reason` tetap berisi kode error saja agar mudah difilter. | Membantu admin membaca pola tanpa mengubah kolom yang ditentukan. |
+| D28 | Test batas bulan | Spesifikasi menyebut "23:30 WIB hari terakhir bulan (secara UTC sudah bulan berikutnya)". Itu keliru: 23:30 WIB = 16:30 UTC di hari yang sama. Kasus UTC beda bulan adalah **00:00–06:59 WIB tanggal 1**. Test mencakup keduanya: 23:30 WIB 30 Nov → November; 00:30 WIB 1 Des (UTC masih 30 Nov) → Desember. | Menguji kasus yang benar-benar berisiko. |
+| D29 | Membuka sesi setelah jam selesai | Ditolak `SESSION_OVER`. | Jendela scan sudah kosong; mencegah sesi "hantu". |
+| D30 | `SheetsBackend` di test | Diuji dengan klien gspread palsu (`tests/fake_gspread.py`): bootstrap idempoten, header salah terdeteksi, retry 429/503, alur absensi penuh. Akses Google Sheets sungguhan **belum teruji** dari lingkungan pengembangan ini. | Test tidak boleh butuh internet. |
+
 ## Usulan (tidak dibangun)
 
 - Ekspor backup Sheets otomatis (Apps Script time-driven trigger) — saat ini hanya didokumentasikan sebagai langkah manual.
