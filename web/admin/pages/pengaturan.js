@@ -69,6 +69,9 @@ function settingsCard(s) {
     map = window.L.map(mapEl, { scrollWheelZoom: true }).setView(has ? [s.lat, s.lng] : DEFAULT_CENTER, has ? 17 : 5);
     window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
+      // Kebijakan tile OSM mewajibkan header Referer, padahal halaman admin memakai no-referrer.
+      // Khusus <img> tile: kirim origin saja (tanpa path/hash).
+      referrerPolicy: "strict-origin-when-cross-origin",
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     if (has) setPoint(s.lat, s.lng);

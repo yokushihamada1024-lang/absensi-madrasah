@@ -59,3 +59,9 @@ def test_service_worker_never_caches_api():
 def test_vendor_files_and_licenses_present():
     assert (WEB / "teacher" / "vendor" / "qr-scanner" / "LICENSE").exists()
     assert (WEB / "teacher" / "vendor" / "qr-scanner" / "qr-scanner-worker.min.js").exists()
+
+
+def test_osm_tiles_send_referer():
+    """Halaman admin no-referrer; tile OSM wajib Referer (kalau tidak: 403 'Access blocked')."""
+    src = (WEB / "admin" / "pages" / "pengaturan.js").read_text(encoding="utf-8")
+    assert 'referrerPolicy: "strict-origin-when-cross-origin"' in src
