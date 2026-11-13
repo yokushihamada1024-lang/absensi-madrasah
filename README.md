@@ -83,6 +83,8 @@ node --test tests/js/api.test.mjs
    .venv/Scripts/python -m scripts.create_admin
    ```
 
+   **Alternatif tanpa koneksi dari laptop (Supabase SQL Editor):** tempel isi `db/schema.sql` → Run, lalu `db/seed.sql` → Run. Untuk admin pertama, jalankan `python -m scripts.admin_sql` di laptop (PIN diketik tersembunyi, yang dicetak hanya hash argon2), lalu tempel `INSERT` hasilnya ke SQL Editor → Run.
+
    `migrate` bersifat idempoten. Ia membuat schema `absensi` beserta tabel dan index, lalu mengisi default kelas, mapel, dan jam sesi. `create_admin` membuat akun admin pertama (PIN minimal 6 karakter).
 4. Tabel berada di schema `absensi` dengan **RLS aktif tanpa policy**, sehingga Supabase Data API (anon key) tidak bisa membaca data gaji. Jangan menambahkan schema `absensi` ke "Exposed schemas" di pengaturan API Supabase.
 
