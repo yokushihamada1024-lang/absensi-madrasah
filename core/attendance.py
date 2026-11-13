@@ -13,7 +13,7 @@ from core import audit, tokens
 from core.geo import check_location
 from core.models import AppError, Attempt, Attendance, SessionDef, SessionInstance, Settings, User
 from core.payroll import assert_not_final, rate_on
-from core.repo.base import AttendanceFilter, Repository
+from core.repo.base import AttendanceFilter, DuplicateAttendanceError, Repository
 from core.timeutil import Clock, parse_hhmm, wib_date, wib_to_utc
 
 
@@ -111,22 +111,19 @@ class AttendanceService:
         r = rate_on(self.repo.rates.list_for(user_id), d)
         return r.rate_per_meeting if r else 0
 
-    def _dedupe_after_write(self, mine: Attendance) -> Attendance:
-        """Verifikasi setelah tulis: jika ada >1 baris valid, void yang lebih baru (auto-duplicate)."""
-        rows = self._valid_rows(mine.session_id, mine.user_id)
-        if len(rows) <= 1:
-            return mine
-        keep, dups = rows[0], rows[1:]
-        for d in dups:
-            voided = d.model_copy(update={"voided": True, "void_reason": "auto-duplicate", "voided_by": "system"})
-            self.repo.attendance.update(voided)
-            audit.record(self.repo, self.clock(), "system", "attendance.void", "attendance", d.attendance_id,
-                         d, voided, "auto-duplicate")
-        if keep.attendance_id != mine.attendance_id:
-            if keep.ticket_id and keep.ticket_id == mine.ticket_id:
-                return keep
-            raise AppError("ALREADY_ATTENDED", "Anda sudah absen di sesi ini.", 409)
-        return mine
+    def _insert(self, a: Attendance) -> Attendance:
+        """Tulis baris. Keunikan dijamin storage (Postgres: partial unique index), lock hanya mengurangi balapan.
+
+        Jika kalah balapan: ticket sama → kembalikan baris pemenang (idempoten); selain itu ALREADY_ATTENDED.
+        """
+        try:
+            self.repo.attendance.add(a)
+            return a
+        except DuplicateAttendanceError:
+            for row in self._valid_rows(a.session_id, a.user_id):
+                if a.ticket_id and row.ticket_id == a.ticket_id:
+                    return row
+            raise AppError("ALREADY_ATTENDED", "Anda sudah absen di sesi ini.", 409) from None
 
     # -- sesi ----------------------------------------------------------------
 
@@ -287,8 +284,7 @@ class AttendanceService:
                     source="scan",
                     ticket_id=t.ticket_id,
                 )
-                self.repo.attendance.add(a)
-                return self._dedupe_after_write(a)
+                return self._insert(a)
         except AppError as e:
             self._log_attempt(user.user_id, session_id, e)
             raise
@@ -358,8 +354,7 @@ class AttendanceService:
                 rate_snapshot=self._rate_for(user_id, d),
                 source="manual",
             )
-            self.repo.attendance.add(a)
-            a = self._dedupe_after_write(a)
+            a = self._insert(a)
         audit.record(self.repo, now, actor.user_id, "attendance.manual", "attendance", a.attendance_id,
                      None, a, reason.strip())
         return a

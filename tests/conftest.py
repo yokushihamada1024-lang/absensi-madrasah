@@ -39,9 +39,51 @@ def clock() -> FakeClock:
     return c
 
 
-@pytest.fixture
-def repo():
-    r = InMemoryRepository()
+PG_TABLES = ["audit_log", "payslips", "attempts", "attendance", "session_instances", "rates", "users",
+             "kelas", "mapel", "session_defs", "settings"]
+
+
+@pytest.fixture(scope="session")
+def pg_db():
+    """Postgres sungguhan untuk test: TEST_DATABASE_URL, atau Postgres lokal sementara via pgserver.
+
+    Tidak butuh internet. Jika keduanya tidak tersedia, test backend Postgres di-skip.
+    """
+    import os
+    import tempfile
+
+    from core.repo.postgres import Database
+
+    dsn = os.environ.get("TEST_DATABASE_URL", "").strip()
+    server = None
+    if not dsn:
+        try:
+            import pgserver
+        except ImportError:
+            pytest.skip("pgserver tidak terpasang dan TEST_DATABASE_URL kosong")
+        server = pgserver.get_server(tempfile.mkdtemp(prefix="absensi-pg-"), cleanup_mode="delete")
+        dsn = server.get_uri()
+    db = Database(dsn, max_size=4)
+    db.migrate()
+    db.migrate()  # idempoten
+    yield db
+    db.close()
+    if server is not None:
+        server.cleanup()
+
+
+@pytest.fixture(params=["memory", "postgres"])
+def repo(request):
+    if request.param == "memory":
+        r = InMemoryRepository()
+    else:
+        from core.repo.postgres import PostgresRepository
+        from core.repo.seed import seed_defaults
+
+        db = request.getfixturevalue("pg_db")
+        db.run("truncate " + ", ".join(f"absensi.{t}" for t in PG_TABLES) + " restart identity cascade")
+        r = PostgresRepository(db=db)
+        seed_defaults(r)
     s = r.settings.get()
     r.settings.save(s.model_copy(update={"lat": MADRASAH[0], "lng": MADRASAH[1], "madrasah_name": "MDA Test"}))
     return r

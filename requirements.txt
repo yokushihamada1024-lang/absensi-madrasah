@@ -1,8 +1,8 @@
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 pydantic==2.10.4
-gspread==6.1.4
-google-auth==2.37.0
+psycopg[binary]==3.2.3
+psycopg-pool==3.2.4
 PyJWT==2.10.1
 argon2-cffi==23.1.0
 reportlab==4.2.5

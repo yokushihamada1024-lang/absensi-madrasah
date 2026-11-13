@@ -19,7 +19,7 @@ from core.models import (
     User,
 )
 
-# Skema tab Google Sheets (baris 1 = header). Urutan kolom = urutan penulisan.
+# Kolom per tabel (dipakai backend in-memory; skema Postgres ada di db/schema.sql).
 SCHEMA: dict[str, list[str]] = {
     "settings": ["key", "value"],
     "session_defs": ["code", "name", "start_hhmm", "end_hhmm"],
@@ -129,6 +129,10 @@ class AttendanceFilter:
     include_voided: bool = True
 
 
+class DuplicateAttendanceError(Exception):
+    """Sudah ada baris valid (voided=false) untuk (session_id, user_id), atau ticket_id sudah dipakai."""
+
+
 class AttendanceRepo(ABC):
     @abstractmethod
     def get(self, attendance_id: str) -> Attendance | None: ...
@@ -138,10 +142,11 @@ class AttendanceRepo(ABC):
 
     @abstractmethod
     def list_for_session_fresh(self, session_id: str) -> list[Attendance]:
-        """Baca fresh dari storage (bukan cache lama) — untuk cek duplikat."""
+        """Baca langsung dari storage (bukan cache) — untuk cek duplikat."""
 
     @abstractmethod
-    def add(self, a: Attendance) -> None: ...
+    def add(self, a: Attendance) -> None:
+        """Raise DuplicateAttendanceError jika melanggar keunikan."""
 
     @abstractmethod
     def update(self, a: Attendance) -> None: ...

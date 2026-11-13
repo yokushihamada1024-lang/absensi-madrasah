@@ -45,10 +45,14 @@ def test_token_lifetime_30_to_60_seconds():
 
 def test_modified_signature_rejected():
     sid, slot, sig = tok().split(".")
-    bad = sig[:-1] + ("A" if sig[-1] != "A" else "B")
-    with pytest.raises(AppError) as e:
-        tokens.verify_qr_token(KEY, f"{sid}.{slot}.{bad}", NOW, ROT)
-    assert e.value.code == "TOKEN_INVALID"
+    for i in range(len(sig)):  # ubah tiap posisi, termasuk karakter terakhir (bit sisa)
+        for ch in "AQgw":
+            if sig[i] == ch:
+                continue
+            bad = sig[:i] + ch + sig[i + 1:]
+            with pytest.raises(AppError) as e:
+                tokens.verify_qr_token(KEY, f"{sid}.{slot}.{bad}", NOW, ROT)
+            assert e.value.code == "TOKEN_INVALID"
 
 
 def test_modified_slot_rejected():

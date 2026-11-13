@@ -10,6 +10,24 @@ Catatan keputusan teknis. Setiap poin yang tidak ditentukan oleh `PROMPT.md`, at
 | P2 | Leaflet **di-vendor** ke `web/admin/vendor/leaflet/` (bukan CDN). Tile diambil dari `tile.openstreetmap.org`; CSP admin mengizinkan `img-src https://tile.openstreetmap.org`. Atribusi "© OpenStreetMap contributors" ditampilkan. | Aturan "tanpa script pihak ketiga". Tile hanya gambar. Trafik 1–3 admin jauh di bawah batas kebijakan tile OSM. |
 | P3 | **Radius = 100 m** (lingkaran berdiameter 200 m), bisa diubah admin di Pengaturan. | Dikonfirmasi pemilik. GPS dalam gedung sering meleset 20–50 m; radius 50 m akan sering menolak guru jujur. |
 
+## PIVOT penyimpanan: Google Sheets → Supabase Postgres (2026-11-13, permintaan pemilik)
+
+Pemilik meminta berhenti memakai Google Sheets dan pindah ke **Supabase Postgres (free tier)**, koneksi lewat **session pooler** (diatur pemilik). Ini mengganti keputusan "TERKUNCI" Bagian 2/7/12 PROMPT soal Sheets; bagian lain arsitektur (FastAPI satu-satunya yang menyentuh data, 2 Static Site, Render Free) tetap.
+
+| # | Keputusan | Alasan |
+|---|---|---|
+| PG1 | `SheetsRepository` dihapus, diganti `PostgresRepository` (`core/repo/postgres.py`, psycopg 3 + psycopg-pool). Logika bisnis tidak berubah (repository pattern). | Permintaan pemilik. |
+| PG2 | Env: `DATABASE_URL` (rahasia, `sync: false`) menggantikan `GOOGLE_*` + `SPREADSHEET_ID`. `REPO_BACKEND` = `memory` \| `postgres`. | — |
+| PG3 | Pool kecil: `max_size=4`, `min_size=1`, dibuka malas saat query pertama, `check_connection` saat checkout, `max_idle=120 dtk`, `prepare_threshold=None`, autocommit. | Kuota koneksi pooler free tier terbatas; `/healthz` tidak boleh menyentuh DB; koneksi yang diputus saat API tidur diganti otomatis; aman bila nanti pindah ke transaction pooler (6543). |
+| PG4 | Tabel di schema **`absensi`** (bukan `public`) + **RLS aktif tanpa policy** di semua tabel. | Supabase Data API (anon key) otomatis mengekspos `public`; dengan ini data gaji tidak bisa dibaca lewat Data API. API kita konek sebagai `postgres` (pemilik tabel) sehingga tidak terkena RLS. |
+| PG5 | **Keunikan absensi dijamin database**: partial unique index `(session_id, user_id) WHERE NOT voided` + unique `ticket_id`. Lock in-process tetap ada (mengurangi balapan), tetapi tidak lagi menjadi penjaga utama. Pelanggaran → `DuplicateAttendanceError` → `ALREADY_ATTENDED` / baris pemenang bila ticket sama. Mekanisme "verifikasi setelah tulis + auto-void `auto-duplicate`" (khusus Sheets) dihapus. | Constraint DB lebih kuat dari baca-ulang ala Sheets. |
+| PG6 | Skema di `db/schema.sql`, diterapkan oleh `python -m scripts.migrate` (idempoten, menggantikan `bootstrap_sheets`), sekaligus mengisi default kelas/mapel/jam sesi. | — |
+| PG7 | Tipe kolom asli Postgres (`timestamptz`, `date`, `bigint`, `boolean`); ID tetap teks UUID4. Tidak ada `DELETE` di kode; void = tandai kolom. | — |
+| PG8 | Test `PostgresRepository` memakai Postgres sungguhan: `TEST_DATABASE_URL` jika di-set, jika tidak **pgserver** (Postgres lokal sementara, dev dependency). Semua test attendance/payroll dijalankan di **kedua** backend (memory & postgres). Koneksi ke Supabase asli **belum teruji** dari lingkungan ini. | Test tidak butuh internet. |
+| PG9 | Batas free tier Supabase yang perlu diketahui: project di-*pause* setelah ±1 minggu tanpa aktivitas (aktivitas harian madrasah biasanya cukup), kuota DB 500 MB (puluhan tahun data absensi skala ini), backup harian otomatis tidak tersedia di free tier → README menjelaskan `pg_dump` bulanan. Pilih region Supabase sama/dekat dengan region Render (mis. Singapore). | Kejujuran soal batasan. |
+
+Keputusan Sheets di bawah yang **tidak berlaku lagi**: D14, D15, D16, D30 (dan bagian "lock per (session,user) + verifikasi setelah tulis" di D18). D17 tetap (upsert, tidak menghapus baris).
+
 ## Keputusan teknis
 
 | # | Topik | Keputusan | Alasan |

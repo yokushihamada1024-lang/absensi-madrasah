@@ -166,16 +166,24 @@ def test_parallel_double_tap_one_row(svc, clock, admin, guru, repo):
     assert set(errors) <= {"ALREADY_ATTENDED"}
 
 
-def test_dedupe_after_write_voids_second(svc, clock, admin, guru, repo):
-    """Simulasi duplikat yang lolos (mis. penulis lain): verifikasi setelah tulis meng-void yang kedua."""
+def test_storage_rejects_duplicate_row(svc, clock, admin, guru, repo):
+    """Lapisan terakhir: storage menolak baris valid kedua walau service dilewati."""
+    from core.repo.base import DuplicateAttendanceError
+
     s = open_s1(svc, clock, admin)
     a = scan_submit(svc, clock, guru, s)
-    dup = a.model_copy(update={"attendance_id": "dup-1", "ticket_id": "other"})
-    repo.attendance.add(dup)
-    kept = svc._dedupe_after_write(a)
-    assert kept.attendance_id == a.attendance_id
-    rows = {x.attendance_id: x for x in repo.attendance.list()}
-    assert rows["dup-1"].voided and rows["dup-1"].void_reason == "auto-duplicate"
+    with pytest.raises(DuplicateAttendanceError):
+        repo.attendance.add(a.model_copy(update={"attendance_id": "dup-1", "ticket_id": "other"}))
+    with pytest.raises(DuplicateAttendanceError):  # ticket_id dipakai ulang
+        repo.attendance.add(a.model_copy(update={"attendance_id": "dup-2", "voided": True}))
+
+
+def test_lost_race_same_ticket_returns_winner(svc, clock, admin, guru, repo):
+    s = open_s1(svc, clock, admin)
+    r = scan(svc, clock, guru, s)
+    a = svc.submit(guru, r.ticket, "Umar", "Fikih")
+    clone = a.model_copy(update={"attendance_id": "x"})
+    assert svc._insert(clone).attendance_id == a.attendance_id
 
 
 def test_ticket_of_other_user_rejected(svc, clock, admin, guru, repo):

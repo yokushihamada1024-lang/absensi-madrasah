@@ -68,7 +68,8 @@ def verify_qr_token(
         uuid.UUID(session_id)
     except (ValueError, UnicodeDecodeError):
         raise invalid from None
-    if str(slot) != slot_s:
+    # Tolak bentuk non-kanonik (base64 longgar soal bit sisa; slot tanpa nol di depan)
+    if str(slot) != slot_s or _b64e(sig) != sig_b64 or _b64e(session_id.encode()) != sid_b64:
         raise invalid
     key = session_key(master_key, session_id)
     expected = hmac.new(key, f"{session_id}.{slot}".encode(), hashlib.sha256).digest()[:SIG_BYTES]

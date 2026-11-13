@@ -36,11 +36,11 @@ def create_admin(repo: Repository, username: str, name: str, pin: str) -> User:
 
 
 def main() -> int:
-    from core.repo.sheets import SheetsRepository
+    from core.repo.postgres import PostgresRepository
 
-    sid = os.environ.get("SPREADSHEET_ID", "").strip()
-    if not sid:
-        print("SPREADSHEET_ID belum di-set.", file=sys.stderr)
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        print("DATABASE_URL belum di-set.", file=sys.stderr)
         return 2
     username = os.environ.get("ADMIN_USERNAME") or input("Username admin: ")
     name = os.environ.get("ADMIN_NAME") or input("Nama lengkap: ")
@@ -49,7 +49,7 @@ def main() -> int:
         print("PIN tidak sama.", file=sys.stderr)
         return 1
     try:
-        u = create_admin(SheetsRepository(sid), username, name, pin)
+        u = create_admin(PostgresRepository(dsn), username, name, pin)
     except AppError as e:
         print(e.message, file=sys.stderr)
         return 1

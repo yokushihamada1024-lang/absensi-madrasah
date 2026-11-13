@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import threading
 
-from core.models import NamedItem
-from core.repo.base import DEFAULT_KELAS, DEFAULT_MAPEL, DEFAULT_SESSION_DEFS, SCHEMA, Repository
+from core.repo.base import SCHEMA, Repository
+from core.repo.seed import seed_defaults
 from core.repo.tables import Row, TableBackend, build_repository, to_row
 
 
@@ -18,8 +18,8 @@ class MemoryBackend(TableBackend):
         with self._lock:
             return [(i + 2, dict(r)) for i, r in enumerate(self._tabs[tab])]
 
-    def tail(self, tab: str, n: int) -> list[Row]:
-        return self.rows(tab)[-n:]
+    def write_lock(self) -> threading.RLock:
+        return self._lock
 
     def append(self, tab: str, values: dict[str, str]) -> int:
         with self._lock:
@@ -34,17 +34,6 @@ class MemoryBackend(TableBackend):
             if cur.get(key_col) != values.get(key_col):
                 raise RuntimeError(f"{tab} baris {rownum}: kunci berubah, update dibatalkan")
             self._tabs[tab][idx] = {c: values.get(c, "") for c in SCHEMA[tab]}
-
-
-def seed_defaults(repo: Repository) -> None:
-    """Isi default kelas, mapel, jam sesi (setara bootstrap_sheets)."""
-    if not repo.meta.list_session_defs():
-        repo.meta.save_session_defs(DEFAULT_SESSION_DEFS)
-    if not repo.meta.list_items("kelas"):
-        repo.meta.save_items("kelas", [NamedItem(name=n) for n in DEFAULT_KELAS])
-    if not repo.meta.list_items("mapel"):
-        repo.meta.save_items("mapel", [NamedItem(name=n) for n in DEFAULT_MAPEL])
-    repo.settings.save(repo.settings.get())
 
 
 def InMemoryRepository(seed: bool = True) -> Repository:  # noqa: N802 — nama sesuai spesifikasi

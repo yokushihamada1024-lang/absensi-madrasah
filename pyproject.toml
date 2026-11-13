@@ -10,6 +10,8 @@ ignore = ["S101", "B008", "S311"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "S108"]
 "scripts/*" = ["S105", "S106"]
+# Hanya nama schema/tabel/kolom konstan yang disisipkan ke SQL; semua nilai memakai parameter %s.
+"core/repo/postgres.py" = ["S608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

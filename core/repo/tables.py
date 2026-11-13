@@ -1,7 +1,6 @@
 """Implementasi entitas repository di atas *table backend* generik (baris = dict[str, str]).
 
-Backend menyediakan operasi minimal: baca semua baris, baca ekor (fresh), append, update baris.
-Tidak ada operasi hapus/sort — sesuai aturan Sheets di PROMPT Bagian 7.
+Dipakai oleh InMemoryRepository (test & mode dev). Produksi memakai core/repo/postgres.py.
 """
 
 from __future__ import annotations
@@ -9,6 +8,7 @@ from __future__ import annotations
 import types
 import typing
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
 from datetime import date, datetime
 from typing import Any, TypeVar
 
@@ -32,6 +32,7 @@ from core.repo.base import (
     AttendanceFilter,
     AttendanceRepo,
     AuditRepo,
+    DuplicateAttendanceError,
     MetaRepo,
     PayslipRepo,
     RateRepo,
@@ -45,16 +46,13 @@ from core.timeutil import to_iso
 Row = tuple[int, dict[str, str]]  # (nomor baris di sheet, nilai)
 M = TypeVar("M", bound=BaseModel)
 
-TAIL_ROWS = 500
-
-
 class TableBackend(ABC):
     @abstractmethod
     def rows(self, tab: str, fresh: bool = False) -> list[Row]: ...
 
     @abstractmethod
-    def tail(self, tab: str, n: int) -> list[Row]:
-        """Baca fresh n baris terakhir."""
+    def write_lock(self) -> AbstractContextManager:
+        """Lock untuk operasi baca-lalu-tulis yang harus atomik."""
 
     @abstractmethod
     def append(self, tab: str, values: dict[str, str]) -> int:
@@ -264,18 +262,19 @@ class TAttendanceRepo(_Keyed, AttendanceRepo):
         return out
 
     def list_for_session_fresh(self, session_id: str) -> list[Attendance]:
-        seen: dict[int, Attendance] = {}
-        for n, r in self.b.tail(self.tab, TAIL_ROWS):
-            if r.get("session_id") == session_id and r.get(self.key):
-                seen[n] = from_row(Attendance, r)
-        # Mirror (diperbarui oleh tulisan proses ini) melengkapi baris lama di luar ekor.
-        for n, r in self.b.rows(self.tab):
-            if n not in seen and r.get("session_id") == session_id and r.get(self.key):
-                seen[n] = from_row(Attendance, r)
-        return [seen[n] for n in sorted(seen)]
+        return [from_row(Attendance, r) for _, r in self.b.rows(self.tab, fresh=True)
+                if r.get("session_id") == session_id and r.get(self.key)]
 
     def add(self, a: Attendance) -> None:
-        self.b.append(self.tab, to_row(a))
+        # Meniru constraint unik Postgres (partial unique index + ticket_id unik).
+        with self.b.write_lock():
+            for _, r in self.b.rows(self.tab, fresh=True):
+                same_slot = r.get("session_id") == a.session_id and r.get("user_id") == a.user_id
+                if same_slot and r.get("voided") != "TRUE" and not a.voided:
+                    raise DuplicateAttendanceError(a.session_id)
+                if a.ticket_id and r.get("ticket_id") == a.ticket_id:
+                    raise DuplicateAttendanceError(a.ticket_id)
+            self.b.append(self.tab, to_row(a))
 
     def update(self, a: Attendance) -> None:
         self._update(a)
