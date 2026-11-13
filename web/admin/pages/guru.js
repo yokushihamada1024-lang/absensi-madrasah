@@ -127,7 +127,7 @@ export async function pageGuru() {
       { label: "Username", render: (u) => u.username },
       { label: "Peran", render: (u) => (u.role === "admin" ? "Admin" : "Guru") },
       { label: "Status", render: (u) => el("span", { class: "pill " + (u.active ? "pill-ok" : "pill-idle") }, u.active ? "Aktif" : "Nonaktif") },
-      { label: "Tarif saat ini", class: "right", render: (u) => (u.role !== "guru" ? "–"
+      { label: "Tarif saat ini", class: "center", render: (u) => (u.role !== "guru" ? "–"
         : u.current_rate === null ? el("span", { class: "pill pill-err" }, "Belum ada tarif") : rupiah(u.current_rate)) },
       { label: "Aksi", class: "actions", render: (u) => el("div", { class: "btns row-actions" },
         u.role === "guru" ? act("wallet", "Tarif", { size: "sm", variant: "primary", onclick: () => rates(u) }) : null,

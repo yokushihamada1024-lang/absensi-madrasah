@@ -328,6 +328,7 @@ tbody tr:hover > td.muted:only-child { box-shadow: none; }
 /* Sel tabel tidak patah per kata; tabel bergulir horizontal di layar sempit. */
 th, td { white-space: nowrap; }
 td:has(> pre), td.wrap { white-space: normal; }
-/* Kolom Aksi: rata kanan dan diberi jarak dari kolom sebelumnya. */
-th.actions, td.actions { text-align: right; padding-left: 32px; width: 1%; }
-td.actions .row-actions, td.actions .btns { justify-content: flex-end; }
+/* Kolom Aksi: judul & tombol di tengah kolom, diberi jarak dari kolom sebelumnya. */
+th.actions, td.actions { text-align: center; padding-left: 28px; padding-right: 28px; width: 1%; }
+td.actions .row-actions, td.actions .btns { justify-content: center; }
+th.center, td.center { text-align: center; }
