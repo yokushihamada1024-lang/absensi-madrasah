@@ -1,7 +1,7 @@
 import { api } from "../shared/api.js";
 import { tanggal, todayWib } from "../shared/format.js";
 import { go, mount, onLeave, refresh } from "../app.js";
-import { alertBox, el, loading, statusPill, table } from "../ui.js";
+import { act, alertBox, el, icon, loading, statusPill, table } from "../ui.js";
 import { countUp } from "../shared/fx.js";
 
 // Angka hanya dianimasikan saat nilainya berubah — segar otomatis tiap menit tidak membuatnya berkedip.
@@ -27,20 +27,26 @@ export async function pageDashboard() {
     const open = s.session?.is_open;
     const state = !s.session ? el("span", { class: "pill pill-idle" }, "Belum dibuka")
       : open ? el("span", { class: "pill pill-info live" }, "Terbuka") : el("span", { class: "pill pill-idle" }, "Ditutup");
-    return el("div", { class: "card stat" },
-      el("div", { class: "k" }, `${s.name} (${s.start_hhmm}–${s.end_hhmm})`),
-      counter(s.code, s.attended, " hadir"), state);
+    return el("div", { class: "card stat" + (open ? " is-live" : "") },
+      el("div", { class: "stat-top" }, el("span", { class: "stat-ico" }, icon("clock")),
+        el("div", { class: "grow" }, el("div", { class: "k" }, s.name), el("div", { class: "muted small" }, `${s.start_hhmm}–${s.end_hhmm} WIB`)),
+        state),
+      counter(s.code, s.attended, " hadir"));
   });
+  const failed = attempts.length;
+  const failCard = el("div", { class: "card stat " + (failed ? "tone-warn" : "tone-ok") },
+    el("div", { class: "stat-top" }, el("span", { class: "stat-ico" }, icon(failed ? "alert" : "shield")),
+      el("div", { class: "grow" }, el("div", { class: "k" }, "Percobaan gagal"),
+        el("div", { class: "muted small" }, failed ? "Periksa alasannya di log" : "Belum ada masalah hari ini"))),
+    el("div", { class: "stat-bottom" }, counter("_attempts", failed),
+      act("arrow", "Lihat log", { size: "sm", variant: failed ? "danger" : "soft", onclick: () => go("/log") })));
   mount(
-    el("h1", {}, "Hari ini"),
-    el("p", { class: "muted" }, tanggal(today, true)),
+    el("div", { class: "page-head" },
+      el("div", {}, el("h1", {}, "Hari ini"), el("p", { class: "muted" }, tanggal(today, true))),
+      act("qr", "Buka layar Sesi & QR", { variant: "primary", size: "lg", onclick: () => go("/sesi") })),
     sess.location_set ? null : alertBox("warn", "Koordinat madrasah belum diisi — sesi tidak bisa dibuka. ",
       el("a", { href: "#/pengaturan" }, "Buka Pengaturan")),
-    el("div", { class: "grid grid-3" }, ...cards,
-      el("div", { class: "card stat" }, el("div", { class: "k" }, "Percobaan gagal hari ini"),
-        counter("_attempts", attempts.length),
-        el("a", { href: "#/log" }, "Lihat log"))),
-    el("div", { class: "toolbar" }, el("button", { class: "btn btn-lg", onclick: () => go("/sesi") }, "Buka layar Sesi & QR")),
+    el("div", { class: "grid grid-3" }, ...cards, failCard),
     el("h2", {}, "Sudah absen hari ini"),
     table([
       { label: "Jam", render: (a) => a.time_hhmm },

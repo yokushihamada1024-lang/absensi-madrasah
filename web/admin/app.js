@@ -119,6 +119,7 @@ async function render() {
   nav.hidden = false;
   root.classList.remove("bare");
   for (const a of nav.querySelectorAll("a[data-route]")) a.classList.toggle("active", a.dataset.route === path);
+  nav.querySelector("a.active")?.scrollIntoView({ block: "nearest", inline: "nearest" }); // menu HP bergulir ke halaman aktif
   try {
     if (!ctx.user) {
       ctx.user = await api("/api/me");

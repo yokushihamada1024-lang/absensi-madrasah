@@ -175,6 +175,76 @@ a:hover { color: var(--lapis-700); }
 .btn-busy { position: absolute; inset: 0; display: grid; place-items: center; color: var(--btn-fg); }
 .btn-busy .bars { width: 1.4em; height: 1.05em; }
 
+/* ---------- Tombol aksi: pill + lingkaran ikon ------------------------------------ */
+.btn-act {
+  --a-bg: #eaeef5; --a-bg-h: #e0e6f0; --a-fg: var(--text); --a-ico: #fff; --a-ico-fg: var(--ink);
+  --a-shadow: 0 0 0 transparent; --a-shadow-h: 0 8px 18px -10px rgba(14, 31, 61, .45);
+  position: relative; isolation: isolate; overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none;
+  display: inline-flex; align-items: center; gap: 9px; flex: none;
+  height: 38px; padding: 0 16px 0 5px; border: 0; border-radius: 999px;
+  background: var(--a-bg); color: var(--a-fg); box-shadow: var(--a-shadow);
+  font: inherit; font-size: .875rem; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap; cursor: pointer;
+  transition: background var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out), color var(--dur-2);
+}
+.act-ico {
+  width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--a-ico); color: var(--a-ico-fg); box-shadow: 0 1px 2px rgba(14, 31, 61, .14);
+  transition: transform var(--dur-3) var(--ease-spring), background-color var(--dur-2);
+}
+.act-ico .ico { width: 15px; height: 15px; stroke-width: 2; }
+.btn-act:hover { background: var(--a-bg-h); box-shadow: var(--a-shadow-h); transform: translateY(-1px); }
+.btn-act:hover .act-ico { transform: rotate(-14deg) scale(1.08); }
+.btn-act:active { transform: scale(.96); transition-duration: 60ms; }
+.btn-act:focus-visible { outline: none; box-shadow: var(--ring); }
+.btn-act[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-act[disabled] .act-ico { transform: none; }
+.act-primary {
+  --a-bg: linear-gradient(120deg, var(--ink) 0%, #1c3d72 100%); --a-bg-h: linear-gradient(120deg, #13284f 0%, #24508f 100%);
+  --a-fg: #fff; --a-ico: #f5e6c4; --a-ico-fg: var(--ink);
+  --a-shadow: 0 1px 2px rgba(14, 31, 61, .3), 0 6px 14px -8px rgba(14, 31, 61, .7);
+  --a-shadow-h: 0 2px 4px rgba(14, 31, 61, .25), 0 12px 24px -10px rgba(14, 31, 61, .75);
+}
+.act-danger { --a-bg: var(--err-soft); --a-bg-h: #fbdcd9; --a-fg: #9a1c13; --a-ico: #fff; --a-ico-fg: var(--err);
+  --a-shadow-h: 0 8px 18px -10px rgba(180, 35, 24, .55); }
+.act-ok { --a-bg: var(--ok-soft); --a-bg-h: #cfeee6; --a-fg: #075a50; --a-ico: #fff; --a-ico-fg: var(--ok); }
+.act-ghost { --a-bg: transparent; --a-bg-h: var(--lapis-50); --a-fg: var(--lapis-700); --a-ico: var(--lapis-50); --a-ico-fg: var(--lapis); }
+.act-ghost .act-ico { box-shadow: none; }
+.act-sm { height: 32px; padding: 0 12px 0 4px; gap: 7px; font-size: .82rem; }
+.act-sm .act-ico { width: 24px; height: 24px; }
+.act-sm .act-ico .ico { width: 13px; height: 13px; }
+.act-lg { height: 46px; padding: 0 20px 0 6px; gap: 11px; font-size: .95rem; }
+.act-lg .act-ico { width: 34px; height: 34px; }
+.act-lg .act-ico .ico { width: 17px; height: 17px; }
+.btn-act[aria-busy="true"] { cursor: progress; }
+.btn-act[aria-busy="true"] .act-label, .btn-act[aria-busy="true"] .act-ico { opacity: 0; }
+.btn-act .btn-busy { color: var(--a-fg); }
+
+/* ---------- Toggle switch ------------------------------------------------------- */
+.switch {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; cursor: pointer; position: relative;
+  width: 42px; height: 24px; border-radius: 999px; background: #cfd6e2;
+  box-shadow: inset 0 1px 2px rgba(14, 31, 61, .15); transition: background-color var(--dur-2) var(--ease-out);
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(14, 31, 61, .3); transition: transform var(--dur-3) var(--ease-spring), width var(--dur-2);
+}
+.switch:active::after { width: 22px; }
+.switch:checked { background: var(--ok); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:checked:active::after { transform: translateX(14px); }
+.switch:focus-visible { outline: none; box-shadow: var(--ring); }
+.switch[disabled] { opacity: .5; cursor: progress; }
+
+/* ---------- Input uang ---------------------------------------------------------- */
+.money { position: relative; display: flex; align-items: stretch; }
+.money .money-pre {
+  position: absolute; left: 1px; top: 1px; bottom: 1px; display: grid; place-items: center; padding: 0 10px 0 12px;
+  color: var(--muted); font-weight: 600; font-size: .9em; border-right: 1px solid var(--line);
+  background: var(--surface-2); border-radius: 11px 0 0 11px; pointer-events: none;
+}
+.money input { padding-left: 52px !important; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .01em; }
+
 /* ---------- Form -------------------------------------------------------------- */
 label { display: block; font-weight: 600; font-size: .9rem; margin: 0 0 6px; color: var(--text); }
 input[type=text], input[type=password], input[type=number], input[type=date], input[type=time], input[type=month],

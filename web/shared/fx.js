@@ -47,6 +47,20 @@ const ICONS = {
   download: ["M12 4v11", "M7 10l5 5 5-5", "M5 20h14"],
   alert: ["M12 4l9 16H3z", "M12 10v4", "M12 17.2v.1"],
   install: ["M12 3v12", "M7 10l5 5 5-5", "M4 17v3h16v-3"],
+  plus: ["M12 5v14", "M5 12h14"],
+  edit: ["M4 20h4L19 9l-4-4L4 16z", "M13.5 6.5l4 4"],
+  key: ["M8 11a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", "M11 12l9-9", "M17 6l2 2", "M14.5 8.5l2 2"],
+  power: ["M12 3v8", "M6.4 6.6a8 8 0 1 0 11.2 0"],
+  wallet: ["M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4z", "M4 7V6a2 2 0 0 1 2-2h10", "M16 13.5h.01"],
+  play: ["M8 5.5l10 6.5-10 6.5z"],
+  stop: ["M7 7h10v10H7z"],
+  expand: ["M4 9V4h5", "M20 9V4h-5", "M4 15v5h5", "M20 15v5h-5"],
+  unlock: ["M6 11h12v9H6z", "M8.5 11V8a3.5 3.5 0 0 1 6.8-1.2"],
+  arrow: ["M5 12h14", "M13 6l6 6-6 6"],
+  shield: ["M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z", "M9 12l2 2 4-4"],
+  file: ["M7 3h7l4 4v14H7z", "M14 3v4h4", "M10 13h5", "M10 17h5"],
+  ban: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M5.7 5.7l12.6 12.6"],
+  search: ["M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", "M20 20l-4-4"],
 };
 
 export function icon(name, cls = "ico") {
@@ -111,7 +125,36 @@ export function haptic(pattern = 30) {
 }
 
 /** Riak sentuh untuk semua tombol — satu listener terdelegasi. */
-export function installRipple(selector = ".btn, .chip, .scan-cta") {
+/** Tombol aksi pill dengan lingkaran ikon. variant: primary | soft | danger | ghost; size: sm | lg. */
+export function act(iconName, label, { variant = "soft", size = "", onclick, type = "button", ...attrs } = {}) {
+  return el("button", { class: `btn-act act-${variant}${size ? ` act-${size}` : ""}`, type, onclick, ...attrs },
+    el("span", { class: "act-ico", "aria-hidden": "true" }, icon(iconName)),
+    el("span", { class: "act-label" }, label));
+}
+
+/** Input Rupiah: pemisah ribuan otomatis saat mengetik. .value → angka (atau null bila kosong). */
+export function moneyInput(value = null, attrs = {}) {
+  const inp = el("input", { type: "text", inputmode: "numeric", autocomplete: "off", placeholder: "0", ...attrs });
+  const fmt = (digits) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const set = (n) => { inp.value = n === null || n === undefined || n === "" ? "" : fmt(String(Math.round(Number(n)))); };
+  set(value);
+  inp.addEventListener("input", () => {
+    const caret = inp.selectionStart ?? inp.value.length;
+    const digitsBefore = inp.value.slice(0, caret).replace(/\D/g, "").length;
+    const digits = inp.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 12);
+    inp.value = fmt(digits);
+    let i = 0;
+    for (let seen = 0; i < inp.value.length && seen < digitsBefore; i++) if (/\d/.test(inp.value[i])) seen++;
+    inp.setSelectionRange(i, i);
+  });
+  const wrap = el("div", { class: "money" }, el("span", { class: "money-pre", "aria-hidden": "true" }, "Rp"), inp);
+  return {
+    wrap, input: inp, set,
+    get value() { const d = inp.value.replace(/\D/g, ""); return d === "" ? null : Number(d); },
+  };
+}
+
+export function installRipple(selector = ".btn, .btn-act, .chip") {
   document.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || reduceMotion()) return;
     const host = e.target.closest?.(selector);

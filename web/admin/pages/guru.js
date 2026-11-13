@@ -2,7 +2,7 @@
 import { api } from "../shared/api.js";
 import { rupiah, tanggal, todayWib } from "../shared/format.js";
 import { ctx, mount, refresh } from "../app.js";
-import { confirmDialog, el, field, input, loading, modal, select, table, toast, toastErr } from "../ui.js";
+import { act, confirmDialog, el, field, input, loading, modal, moneyInput, select, table, toast, toastErr } from "../ui.js";
 
 function pinInput() {
   return input({ type: "password", autocomplete: "new-password", minlength: "6", maxlength: "64" });
@@ -18,9 +18,9 @@ async function addUser() {
   const name = input({ maxlength: "100" });
   const role = select([["guru", "Guru"], ["admin", "Admin"]], "guru");
   const pin = pinInput();
-  const rate = input({ type: "number", min: "0", step: "1000" });
+  const rate = moneyInput();
   const eff = input({ type: "date", value: `${todayWib().slice(0, 8)}01` });
-  const rateFields = el("div", { class: "inline" }, field("Tarif per pertemuan (Rp)", rate), field("Berlaku mulai", eff));
+  const rateFields = el("div", { class: "inline" }, field("Tarif per pertemuan", rate.wrap), field("Berlaku mulai", eff));
   role.addEventListener("change", () => rateFields.classList.toggle("hidden", role.value !== "guru"));
   const body = await modal({
     title: "Tambah pengguna",
@@ -32,8 +32,8 @@ async function addUser() {
       const b = { username: username.value.trim().toLowerCase(), name: name.value.trim(), role: role.value, pin: checkPin(pin.value) };
       if (!b.username || !b.name) throw new Error("Username dan nama wajib diisi.");
       if (b.role === "guru") {
-        if (rate.value === "") throw new Error("Tarif wajib diisi untuk guru.");
-        b.rate_per_meeting = Number(rate.value);
+        if (rate.value === null) throw new Error("Tarif wajib diisi untuk guru.");
+        b.rate_per_meeting = rate.value;
         b.effective_from = eff.value;
       }
       return b;
@@ -87,22 +87,22 @@ async function resetPin(u) {
 async function rates(u) {
   let hist = [];
   try { hist = await api(`/api/admin/users/${u.user_id}/rates`); } catch (err) { toastErr(err); return; }
-  const amount = input({ type: "number", min: "0", step: "1000" });
+  const amount = moneyInput();
   const eff = input({ type: "date", value: todayWib() });
   const v = await modal({
     title: `Tarif — ${u.name}`, okText: "Simpan tarif baru",
     build: (b) => b.append(
       el("p", { class: "muted small" }, "Tarif baru hanya berlaku untuk absensi pada/sesudah tanggal berlaku. Absensi lama tetap memakai tarif saat itu (snapshot)."),
-      el("div", { class: "inline" }, field("Tarif baru (Rp)", amount), field("Berlaku mulai", eff)),
+      el("div", { class: "inline" }, field("Tarif baru", amount.wrap), field("Berlaku mulai", eff)),
       el("h3", {}, "Riwayat tarif"),
       table([
         { label: "Berlaku mulai", render: (r) => tanggal(r.effective_from) },
         { label: "Tarif", render: (r) => rupiah(r.rate_per_meeting), class: "right" },
       ], hist, { empty: "Belum ada tarif." })),
     collect: () => {
-      if (amount.value === "" || Number(amount.value) < 0) throw new Error("Isi tarif.");
+      if (amount.value === null) throw new Error("Isi tarif.");
       if (!eff.value) throw new Error("Isi tanggal berlaku.");
-      return { rate_per_meeting: Number(amount.value), effective_from: eff.value };
+      return { rate_per_meeting: amount.value, effective_from: eff.value };
     },
   });
   if (!v) return;
@@ -118,8 +118,10 @@ export async function pageGuru() {
   const users = await api("/api/admin/users");
   users.sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === "guru" ? -1 : 1));
   mount(
-    el("h1", {}, "Guru & Pengguna"),
-    el("div", { class: "toolbar" }, el("button", { class: "btn", onclick: addUser }, "+ Tambah pengguna")),
+    el("div", { class: "page-head" },
+      el("div", {}, el("h1", {}, "Guru & Pengguna"),
+        el("p", { class: "muted" }, `${users.filter((u) => u.role === "guru" && u.active).length} guru aktif.`)),
+      act("plus", "Tambah pengguna", { variant: "primary", onclick: addUser })),
     table([
       { label: "Nama", render: (u) => u.name },
       { label: "Username", render: (u) => u.username },
@@ -127,13 +129,13 @@ export async function pageGuru() {
       { label: "Status", render: (u) => el("span", { class: "pill " + (u.active ? "pill-ok" : "pill-idle") }, u.active ? "Aktif" : "Nonaktif") },
       { label: "Tarif saat ini", class: "right", render: (u) => (u.role !== "guru" ? "–"
         : u.current_rate === null ? el("span", { class: "pill pill-err" }, "Belum ada tarif") : rupiah(u.current_rate)) },
-      { label: "Aksi", class: "actions", render: (u) => el("div", { class: "btns" },
-        u.role === "guru" ? el("button", { class: "btn btn-sm", onclick: () => rates(u) }, "Tarif") : null,
-        el("button", { class: "btn btn-sm btn-ghost", onclick: () => editName(u) }, "Ubah nama"),
-        el("button", { class: "btn btn-sm btn-ghost", onclick: () => resetPin(u) }, "Reset PIN"),
+      { label: "Aksi", class: "actions", render: (u) => el("div", { class: "btns row-actions" },
+        u.role === "guru" ? act("wallet", "Tarif", { size: "sm", variant: "primary", onclick: () => rates(u) }) : null,
+        act("edit", "Ubah nama", { size: "sm", onclick: () => editName(u) }),
+        act("key", "Reset PIN", { size: "sm", onclick: () => resetPin(u) }),
         u.user_id === ctx.user.user_id ? null
-          : el("button", { class: "btn btn-sm " + (u.active ? "btn-danger" : "btn-ghost"), onclick: () => toggleActive(u) },
-            u.active ? "Nonaktifkan" : "Aktifkan")) },
+          : act("power", u.active ? "Nonaktifkan" : "Aktifkan", { size: "sm", variant: u.active ? "danger" : "ok",
+            onclick: () => toggleActive(u) })) },
     ], users),
   );
 }

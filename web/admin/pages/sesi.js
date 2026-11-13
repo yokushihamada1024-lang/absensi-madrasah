@@ -2,7 +2,7 @@
 import { api } from "../shared/api.js";
 import { hhmm, tanggal, todayWib } from "../shared/format.js";
 import { mount, onLeave, refresh } from "../app.js";
-import { alertBox, busy, confirmDialog, el, loading, statusPill, table, toast, toastErr } from "../ui.js";
+import { act, alertBox, busy, confirmDialog, el, loading, statusPill, table, toast, toastErr } from "../ui.js";
 
 export async function pageSesi() {
   mount(el("h1", {}, "Sesi & QR"), loading());
@@ -11,7 +11,7 @@ export async function pageSesi() {
   if (open) return showQr(open);
 
   const rows = data.sessions.map((s) => {
-    const btn = el("button", { class: "btn btn-lg", disabled: !data.location_set }, `Mulai ${s.name}`);
+    const btn = act("play", `Mulai ${s.name}`, { variant: "primary", size: "lg", disabled: !data.location_set });
     btn.addEventListener("click", async () => {
       busy(btn, true);
       try {
@@ -24,8 +24,8 @@ export async function pageSesi() {
       }
     });
     const info = s.session ? `Ditutup ${s.session.closed_at ? hhmm(s.session.closed_at) : ""} · ${s.attended} hadir` : "Belum dibuka";
-    return el("div", { class: "card" }, el("h2", {}, `${s.name} — ${s.start_hhmm}–${s.end_hhmm} WIB`),
-      el("p", { class: "muted" }, info), btn);
+    return el("div", { class: "card" }, el("h2", {}, `${s.name} · ${s.start_hhmm}–${s.end_hhmm} WIB`),
+      el("p", { class: "muted" }, info), el("div", { class: "card-foot" }, btn));
   });
   mount(
     el("h1", {}, "Sesi & QR"),
@@ -48,8 +48,8 @@ function showQr(item) {
     el("div", { class: "qr-meta" }, el("span", {}, "QR berganti dalam ", countdown), conn));
   let period = 0; // lama berlaku QR (ms), untuk bilah progres
   const listWrap = el("div", {}, loading());
-  const closeBtn = el("button", { class: "btn btn-danger" }, "Tutup Sesi");
-  const fsBtn = el("button", { class: "btn btn-ghost" }, "Layar penuh");
+  const closeBtn = act("stop", "Tutup sesi", { variant: "danger" });
+  const fsBtn = act("expand", "Layar penuh");
   mount(
     el("h1", {}, "Sesi & QR"),
     el("div", { class: "qr-stage" },

@@ -1,9 +1,21 @@
 // Helper UI admin (DOM API saja; teks dari server selalu text node).
 import { ApiError } from "./shared/api.js";
 import { clear, el } from "./shared/format.js";
-import { busy, loadingBlock } from "./shared/fx.js";
+import { act, busy, icon, loadingBlock, moneyInput } from "./shared/fx.js";
 
-export { busy, clear, el };
+export { act, busy, clear, el, icon, moneyInput };
+
+/** Kepala kartu: judul + keterangan di kiri, aksi di kanan. */
+export function cardHead(title, sub, ...actions) {
+  return el("div", { class: "card-head" },
+    el("div", {}, el("h2", {}, title), sub ? el("p", { class: "muted small" }, sub) : null),
+    actions.length ? el("div", { class: "btns" }, actions) : null);
+}
+
+/** Kaki kartu: area tombol simpan, terpisah garis dari isi. */
+export function cardFoot(...children) {
+  return el("div", { class: "card-foot" }, children);
+}
 
 const dialog = document.getElementById("dialog");
 const toastEl = document.getElementById("toast");
@@ -47,8 +59,11 @@ export function table(columns, rows, { empty = "Tidak ada data.", rowClass, foot
 }
 
 export function field(labelText, input, hint) {
-  const id = input.id || `f-${Math.random().toString(36).slice(2, 9)}`;
-  input.id = id;
+  // Bisa menerima pembungkus (mis. input Rupiah): label diarahkan ke kontrol di dalamnya.
+  const ctl = ["INPUT", "SELECT", "TEXTAREA"].includes(input.tagName) ? input
+    : input.querySelector("input, select, textarea") || input;
+  const id = ctl.id || `f-${Math.random().toString(36).slice(2, 9)}`;
+  ctl.id = id;
   return el("div", { class: "field" }, el("label", { for: id }, labelText), input,
     hint ? el("div", { class: "muted small" }, hint) : null);
 }

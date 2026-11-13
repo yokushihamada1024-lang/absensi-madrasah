@@ -2,7 +2,7 @@
 import { api } from "../shared/api.js";
 import { rupiah, tanggal, todayWib } from "../shared/format.js";
 import { mount, refresh } from "../app.js";
-import { askReason, el, field, input, loading, modal, select, statusPill, table, toast, toastErr } from "../ui.js";
+import { act, askReason, el, field, input, loading, modal, select, statusPill, table, toast, toastErr } from "../ui.js";
 
 function readFilters() {
   const p = new URLSearchParams(location.hash.split("?")[1] || "");
@@ -73,9 +73,9 @@ export async function pageAbsensi() {
     el("h1", {}, "Absensi"),
     el("div", { class: "toolbar" },
       field("Dari", from), field("Sampai", to), field("Guru", who),
-      el("button", { class: "btn", onclick: apply }, "Tampilkan"),
+      act("search", "Tampilkan", { variant: "primary", onclick: apply }),
       el("span", { class: "grow" }),
-      el("button", { class: "btn btn-ghost", onclick: () => manualEntry(gurus, meta) }, "+ Input manual")),
+      act("plus", "Input manual", { onclick: () => manualEntry(gurus, meta) })),
     el("p", { class: "muted" }, `${valid.length} absensi valid, ${rows.length - valid.length} di-void.`),
     table([
       { label: "Tanggal", class: "nowrap", render: (a) => tanggal(a.date) },
@@ -88,7 +88,7 @@ export async function pageAbsensi() {
       { label: "Sumber", render: (a) => (a.source === "manual" ? "Manual" : `Scan${a.distance_m !== null ? ` · ${Math.round(a.distance_m)} m` : ""}`) },
       { label: "Aksi", class: "actions", render: (a) => (a.voided
         ? el("span", { class: "muted small" }, `Alasan: ${a.void_reason}`)
-        : el("button", { class: "btn btn-sm btn-danger", onclick: () => voidRow(a) }, "Void")) },
+        : act("ban", "Void", { size: "sm", variant: "danger", onclick: () => voidRow(a) })) },
     ], rows, { rowClass: (a) => (a.voided ? "voided" : null), empty: "Tidak ada absensi pada rentang ini." }),
   );
 }
