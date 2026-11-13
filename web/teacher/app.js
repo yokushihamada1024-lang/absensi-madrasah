@@ -200,19 +200,23 @@ function greeting() {
 }
 
 function liveClock() {
-  const hm = el("span", {});
-  const sec = el("span", { class: "sec" });
-  const time = el("span", { class: "time", role: "timer", "aria-label": "Jam sekarang (WIB)" }, hm, sec);
+  const time = el("span", { class: "time", role: "timer", "aria-label": "Jam sekarang (WIB)" });
+  const day = el("span", { class: "day" });
+  let last = "";
   const tick = () => {
     const p = wibParts(new Date());
-    hm.textContent = `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
-    sec.textContent = `:${String(p.ss).padStart(2, "0")}`;
+    const hm = `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
+    if (hm === last) return; // DOM hanya disentuh saat menit berganti
+    last = hm;
+    time.textContent = hm;
+    day.textContent = tanggal(todayWib(), true);
   };
   tick();
+  // Cek tiap detik agar pergantian menit tepat waktu; saat aplikasi kembali dibuka, langsung disegarkan.
   const t = setInterval(tick, 1000);
-  state.cleanup.push(() => clearInterval(t));
-  return el("div", { class: "clock" }, time, el("span", { class: "tz" }, "WIB"),
-    el("span", { class: "day" }, tanggal(todayWib(), true)));
+  document.addEventListener("visibilitychange", tick);
+  state.cleanup.push(() => { clearInterval(t); document.removeEventListener("visibilitychange", tick); });
+  return el("div", { class: "clock" }, time, el("span", { class: "tz" }, "WIB"), day);
 }
 
 function homeHero() {
@@ -229,31 +233,68 @@ function scanButton(hint) {
     el("button", { class: "scan-cta", onclick: () => { haptic(15); go("/scan"); } },
       khatam("halo"), khatam("khatam"),
       el("span", { class: "label" }, icon("qr"), "Scan Absen")),
-    hint ? el("p", { class: "scan-hint" }, hint) : null);
+    hint || null);
 }
 
+const HOME_REFRESH_MS = 20_000;
+
 async function pageHome() {
-  // Kerangka langsung tampil (jam & tombol scan); data bulan menyusul.
+  // Kerangka langsung tampil (jam & tombol scan); data menyusul dan disegarkan berkala (realtime).
   const body = el("div", {}, loading("Memuat ringkasan…"));
-  const renderShell = () => view(homeHero(), scanButton(null), body);
+  const hint = el("p", { class: "scan-hint", "aria-live": "polite" });
+  const renderShell = () => view(homeHero(), scanButton(hint), body);
   if (state.user) renderShell(); // saat pertama buka, layar pembuka tetap tampil sampai profil dimuat
   try {
     await ensureUser();
     if (!root.contains(body)) renderShell();
-    const s = await api("/api/me/summary");
+  } catch (err) {
+    view(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
+    return;
+  }
+
+  let first = true;
+  let lastKey = "";
+  let alive = true;
+  let timer = null;
+  let inflight = false;
+
+  async function load() {
+    if (inflight) return;
+    inflight = true;
+    clearTimeout(timer);
+    try {
+      const s = await api("/api/me/summary");
+      if (!alive) return;
+      // Hanya gambar ulang bila data berubah, agar tidak berkedip tiap penyegaran.
+      const key = JSON.stringify([s.today, s.meetings, s.estimated_gross, s.dates, s.period_status, s.current_rate]);
+      if (key !== lastKey) {
+        lastKey = key;
+        drawSummary(s, first);
+        first = false;
+      }
+    } catch (err) {
+      if (!alive) return;
+      if (first) body.replaceChildren(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
+    } finally {
+      inflight = false;
+      if (alive) timer = setTimeout(load, HOME_REFRESH_MS);
+    }
+  }
+
+  function drawSummary(s, animate) {
     const rate = s.current_rate === null ? "Belum diatur" : rupiah(s.current_rate);
     const open = s.today.sessions.find((x) => x.is_open && !x.attended);
-    const hint = root.querySelector(".scan-wrap");
-    if (hint && open) hint.append(el("p", { class: "scan-hint" }, `${open.name} sedang dibuka`));
-    const earn = el("div", { class: "v" }, rupiah(0));
-    const meetings = el("div", { class: "v" }, "0");
-    body.replaceChildren(
-      el("section", { class: "card enter" },
+    hint.textContent = open ? `${open.name} sedang dibuka — silakan scan` : "";
+    const earn = el("div", { class: "v" }, rupiah(s.estimated_gross));
+    const meetings = el("div", { class: "v" }, String(s.meetings));
+    const enterCls = animate ? " enter" : "";
+    body.replaceChildren(...[
+      el("section", { class: "card" + enterCls },
         el("div", { class: "card-title" }, "Hari ini", el("span", { class: "sub" }, tanggalPendek(todayWib()))),
         s.today.sessions.length
           ? el("ol", { class: "timeline" }, s.today.sessions.map(sessionItem))
           : emptyState("Tidak ada sesi hari ini.")),
-      el("section", { class: "card enter" },
+      el("section", { class: "card" + enterCls },
         el("div", { class: "card-title" }, `Bulan ${s.period_label}`,
           el("span", { class: "sub" }, s.period_status === "final" ? "Final" : "Berjalan")),
         el("div", { class: "earn" }, el("span", { class: "k" }, "Estimasi gaji saat ini"), earn,
@@ -268,13 +309,24 @@ async function pageHome() {
           : el("p", { class: "muted small" }, "Belum ada kehadiran bulan ini.")),
       el("button", { class: "btn btn-ghost", onclick: () => go("/riwayat") }, icon("history"), "Lihat riwayat"),
       installCard(),
-    );
-    countUp(earn, s.estimated_gross, rupiah);
-    countUp(meetings, s.meetings);
-  } catch (err) {
-    if (!state.user) { view(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi")); return; }
-    body.replaceChildren(errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
+    ].filter(Boolean)); // replaceChildren mengubah null jadi teks "null"
+    if (animate) {
+      countUp(earn, s.estimated_gross, rupiah);
+      countUp(meetings, s.meetings);
+    }
   }
+
+  // Segarkan segera saat aplikasi kembali dibuka / koneksi pulih.
+  const wake = () => { if (document.visibilityState === "visible" && navigator.onLine) load(); };
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("online", wake);
+  state.cleanup.push(() => {
+    alive = false;
+    clearTimeout(timer);
+    document.removeEventListener("visibilitychange", wake);
+    window.removeEventListener("online", wake);
+  });
+  await load();
 }
 
 // --- halaman: Scan -------------------------------------------------------------

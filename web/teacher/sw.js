@@ -1,5 +1,5 @@
 // Service worker: HANYA meng-cache app shell. Tidak pernah meng-cache API (/api/*, /healthz, origin lain).
-const CACHE = "absensi-guru-shell-v2";
+const CACHE = "absensi-guru-shell-v3";
 const SHELL = [
   "./", "index.html", "app.js", "scanner.js", "styles.css", "config.js", "manifest.webmanifest",
   "shared/api.js", "shared/format.js", "shared/fx.js", "shared/base.css",

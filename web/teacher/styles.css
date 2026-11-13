@@ -37,7 +37,6 @@ h2 { font-size: 1.12rem; }
   font-family: var(--font-display); font-variant-numeric: tabular-nums; font-weight: 300;
   font-size: clamp(2.6rem, 13vw, 3.4rem); line-height: 1; letter-spacing: -0.03em;
 }
-.clock .time .sec { color: var(--brass-300); font-weight: 300; }
 .clock .tz { color: #a9b6cf; font-size: .85rem; font-weight: 600; }
 .clock .day { flex-basis: 100%; color: #cfd8ea; font-size: .95rem; }
 
@@ -64,7 +63,8 @@ h2 { font-size: 1.12rem; }
 .scan-cta:active { transform: scale(.95); transition-duration: 80ms; }
 .scan-cta:focus-visible { outline: none; }
 .scan-cta:focus-visible .khatam rect { stroke: var(--lapis); stroke-width: 3; }
-.scan-hint { color: var(--muted); font-size: .9rem; margin-top: 10px; text-align: center; }
+.scan-hint { color: var(--lapis-700); font-weight: 600; font-size: .9rem; margin-top: 10px; text-align: center; }
+.scan-hint:empty { display: none; }
 @keyframes turn { to { transform: rotate(360deg); } }
 
 /* ---------- Kartu ---------- */
