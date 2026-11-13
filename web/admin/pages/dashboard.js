@@ -55,7 +55,7 @@ export async function pageDashboard() {
       { label: "Kelas", render: (a) => a.kelas },
       { label: "Mapel", render: (a) => a.mapel },
       { label: "Status", render: (a) => statusPill(a.status, a.late_min) },
-      { label: "Sumber", render: (a) => (a.source === "manual" ? "Manual" : "Scan") },
+      { label: "Sumber", render: (a) => ({ manual: "Manual", button: "Tombol" }[a.source] || "Scan") },
     ], att.slice().sort((x, y) => x.scanned_at.localeCompare(y.scanned_at)), { empty: "Belum ada yang absen." }),
   );
   // Segarkan tiap 60 dtk; refresh() menjalankan cleanup sehingga timer tidak menumpuk.

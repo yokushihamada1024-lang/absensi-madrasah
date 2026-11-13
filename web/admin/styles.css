@@ -266,6 +266,14 @@ td.actions { white-space: nowrap; }
 .item-row.off .item-state { color: var(--faint); font-weight: 500; }
 .item-row.fresh { animation: fresh 1.4s var(--ease-out); }
 @keyframes fresh { 0% { background: var(--brass-50); } 100% { background: transparent; } }
+/* Opsi on/off di dalam form pengaturan. */
+.opt-toggle { display: flex; align-items: center; gap: 14px; margin-top: 16px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.opt-toggle .opt-text { flex: 1; min-width: 0; }
+.opt-toggle label { margin: 0 0 2px; font-weight: 600; cursor: pointer; }
+.opt-toggle p { margin: 0; }
+.opt-toggle .item-state { min-width: 4.6em; text-align: right; }
+.opt-toggle.off .item-state { color: var(--faint); font-weight: 500; }
 .item-empty { display: none; padding: 22px 16px; text-align: center; }
 .item-list.is-empty .item-empty { display: block; }
 

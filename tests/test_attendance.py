@@ -255,3 +255,78 @@ def test_manual_entry_creates_closed_session(svc, clock, admin, guru, repo):
         svc.manual_entry(admin, guru.user_id, d, "S2", "Hafsah", "Tahfidz", "lagi")
     assert e.value.code == "ALREADY_ATTENDED"
     assert repo.audit.recent()[0].action == "attendance.manual"
+
+
+# --- konfirmasi tanpa QR (fallback tombol) --------------------------------------
+
+
+def allow_button(repo, on=True):
+    repo.settings.save(repo.settings.get().model_copy(update={"allow_button_checkin": on}))
+
+
+def confirm(svc, clock, user, session, lat=MADRASAH[0], lng=MADRASAH[1], acc=10.0):
+    ms = clock().timestamp() * 1000
+    return svc.confirm(user, session.session_id, lat, lng, acc, ms, ms)
+
+
+def test_button_disabled_by_default_and_logged(svc, clock, admin, guru, repo):
+    s = open_s1(svc, clock, admin)
+    with pytest.raises(AppError) as e:
+        confirm(svc, clock, guru, s)
+    assert e.value.code == "BUTTON_DISABLED" and e.value.status == 403
+    assert repo.attempts.recent()[0].reason == "BUTTON_DISABLED"
+
+
+def test_button_checkin_records_source_button(svc, clock, admin, guru, repo):
+    allow_button(repo)
+    s = open_s1(svc, clock, admin)
+    clock.set_wib(TODAY, "13:37")
+    r = confirm(svc, clock, guru, s)
+    assert r.method == "button"
+    a = svc.submit(guru, r.ticket, "Umar", "Fikih")
+    assert a.source == "button" and a.status == "late" and a.late_min == 7
+    assert a.distance_m is not None and a.distance_m < 1
+    assert repo.attendance.get(a.attendance_id).source == "button"
+
+
+def test_button_checkin_enforces_radius(svc, clock, admin, guru, repo):
+    allow_button(repo)
+    s = open_s1(svc, clock, admin)
+    with pytest.raises(AppError) as e:
+        confirm(svc, clock, guru, s, lat=MADRASAH[0] + 0.0015)  # ±167 m
+    assert e.value.code == "OUT_OF_RANGE"
+    att = repo.attempts.recent()[0]
+    assert att.reason == "OUT_OF_RANGE" and att.session_id == s.session_id
+
+
+def test_button_checkin_enforces_accuracy_window_and_duplicate(svc, clock, admin, guru, repo):
+    allow_button(repo)
+    s = open_s1(svc, clock, admin)
+    with pytest.raises(AppError) as e:
+        confirm(svc, clock, guru, s, acc=200)
+    assert e.value.code == "LOW_ACCURACY"
+    scan_submit(svc, clock, guru, s)  # sudah absen lewat QR
+    with pytest.raises(AppError) as e:
+        confirm(svc, clock, guru, s)
+    assert e.value.code == "ALREADY_ATTENDED"
+    svc.close_session(admin, s.session_id)
+    clock.advance(seconds=1)
+    g2 = make_user(repo, "Guru Z")
+    with pytest.raises(AppError) as e:
+        confirm(svc, clock, g2, s)
+    assert e.value.code == "SESSION_CLOSED"
+
+
+def test_button_unknown_session(svc, clock, admin, guru, repo):
+    allow_button(repo)
+    open_s1(svc, clock, admin)
+    ms = clock().timestamp() * 1000
+    with pytest.raises(AppError) as e:
+        svc.confirm(guru, "00000000-0000-0000-0000-000000000000", MADRASAH[0], MADRASAH[1], 10, ms, ms)
+    assert e.value.code == "SESSION_NOT_FOUND"
+
+
+def test_qr_scan_still_source_scan(svc, clock, admin, guru, repo):
+    allow_button(repo)
+    s = open_s1(svc, clock, admin)
+    assert scan_submit(svc, clock, guru, s).source == "scan"

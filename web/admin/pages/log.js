@@ -9,7 +9,7 @@ const REASONS = {
   OUT_OF_RANGE: "Di luar radius", LOW_ACCURACY: "GPS lemah", STALE_LOCATION: "Lokasi kedaluwarsa",
   ALREADY_ATTENDED: "Sudah absen", TICKET_EXPIRED: "Tiket habis", TICKET_INVALID: "Tiket tidak valid",
   INVALID_KELAS: "Kelas tidak valid", INVALID_MAPEL: "Mapel tidak valid", PERIOD_FINAL: "Periode final",
-  LOCATION_NOT_SET: "Lokasi belum diatur",
+  LOCATION_NOT_SET: "Lokasi belum diatur", BUTTON_DISABLED: "Tombol nonaktif", SESSION_NOT_FOUND: "Sesi tidak ada",
 };
 
 function when(iso) {

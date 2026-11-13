@@ -85,7 +85,8 @@ export async function pageAbsensi() {
       { label: "Kelas / Mapel", render: (a) => `${a.kelas} / ${a.mapel}` },
       { label: "Status", render: (a) => (a.voided ? el("span", { class: "pill pill-err" }, "Void") : statusPill(a.status, a.late_min)) },
       { label: "Tarif", class: "right", render: (a) => rupiah(a.rate_snapshot) },
-      { label: "Sumber", render: (a) => (a.source === "manual" ? "Manual" : `Scan${a.distance_m !== null ? ` · ${Math.round(a.distance_m)} m` : ""}`) },
+      { label: "Sumber", render: (a) => (a.source === "manual" ? "Manual"
+        : `${a.source === "button" ? "Tombol" : "Scan"}${a.distance_m !== null ? ` · ${Math.round(a.distance_m)} m` : ""}`) },
       { label: "Aksi", class: "actions", render: (a) => (a.voided
         ? el("span", { class: "muted small" }, `Alasan: ${a.void_reason}`)
         : act("ban", "Void", { size: "sm", variant: "danger", onclick: () => voidRow(a) })) },

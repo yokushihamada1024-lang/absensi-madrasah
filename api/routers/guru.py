@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from api.auth import client_ip, ctx, current_user, issue_access_token, require_guru
-from api.schemas import PERIOD_RE, LoginIn, ScanIn, SubmitIn, attendance_out, session_out, user_out
+from api.schemas import PERIOD_RE, ConfirmIn, LoginIn, ScanIn, SubmitIn, attendance_out, session_out, user_out
 from api.state import AppContext
-from core.attendance import compute_status, scan_window
+from core.attendance import ScanResult, compute_status, scan_window
 from core.models import AppError, User
 from core.payroll import compute_line, rate_on
 from core.security import verify_pin
@@ -88,6 +88,7 @@ def me_summary(
         "current_rate": cur.rate_per_meeting if cur else None,
         "estimated_gross": line.gross,
         "today": {"date": today.isoformat(), "sessions": today_sessions},
+        "button_checkin": c.repo.settings.get().allow_button_checkin,
     }
 
 
@@ -114,9 +115,7 @@ def meta(user: User = Depends(current_user), c: AppContext = Depends(ctx)) -> di
     }
 
 
-@router.post("/attendance/scan")
-def attendance_scan(body: ScanIn, user: User = Depends(require_guru), c: AppContext = Depends(ctx)) -> dict:
-    r = c.svc.scan(user, body.token, body.lat, body.lng, body.accuracy_m, body.position_ts, body.client_ts)
+def _ticket_out(r: ScanResult, c: AppContext) -> dict:
     status, late = compute_status(r.scanned_at, r.session.scheduled_start, c.repo.settings.get().grace_min)
     return {
         "ticket": r.ticket,
@@ -125,9 +124,23 @@ def attendance_scan(body: ScanIn, user: User = Depends(require_guru), c: AppCont
         "session": session_out(r.session, _def_names(c)),
         "distance_m": r.distance_m,
         "accuracy_m": r.accuracy_m,
+        "method": r.method,
         "status_preview": status,
         "late_min_preview": late,
     }
+
+
+@router.post("/attendance/scan")
+def attendance_scan(body: ScanIn, user: User = Depends(require_guru), c: AppContext = Depends(ctx)) -> dict:
+    r = c.svc.scan(user, body.token, body.lat, body.lng, body.accuracy_m, body.position_ts, body.client_ts)
+    return _ticket_out(r, c)
+
+
+@router.post("/attendance/confirm")
+def attendance_confirm(body: ConfirmIn, user: User = Depends(require_guru), c: AppContext = Depends(ctx)) -> dict:
+    """Fallback tanpa QR (jika diizinkan admin): sesi dipilih langsung, lokasi & radius tetap dicek."""
+    r = c.svc.confirm(user, body.session_id, body.lat, body.lng, body.accuracy_m, body.position_ts, body.client_ts)
+    return _ticket_out(r, c)
 
 
 @router.post("/attendance/submit")

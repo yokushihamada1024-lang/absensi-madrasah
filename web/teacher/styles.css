@@ -65,6 +65,11 @@ h2 { font-size: 1.12rem; }
 .scan-cta:focus-visible .khatam rect { stroke: var(--lapis); stroke-width: 3; }
 .scan-hint { color: var(--lapis-700); font-weight: 600; font-size: .9rem; margin-top: 10px; text-align: center; }
 .scan-hint:empty { display: none; }
+.scan-alt:empty { display: none; }
+.scan-alt, .alt-wrap { display: flex; justify-content: center; margin-top: 4px; }
+.alt-wrap { margin-top: 12px; }
+.alt-link { gap: 6px; font-size: .9rem; }
+.alt-link .ico { width: 18px; height: 18px; }
 @keyframes turn { to { transform: rotate(360deg); } }
 
 /* ---------- Kartu ---------- */

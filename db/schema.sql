@@ -79,12 +79,16 @@ create table if not exists absensi.attendance (
     status        text not null check (status in ('on_time', 'late')),
     late_min      integer not null default 0,
     rate_snapshot bigint not null default 0,
-    source        text not null check (source in ('scan', 'manual')),
+    source        text not null check (source in ('scan', 'manual', 'button')),
     voided        boolean not null default false,
     void_reason   text not null default '',
     voided_by     text not null default '',
     ticket_id     text
 );
+-- Migrasi DB lama: izinkan source 'button' (konfirmasi kehadiran tanpa QR).
+alter table absensi.attendance drop constraint if exists attendance_source_check;
+alter table absensi.attendance add constraint attendance_source_check
+    check (source in ('scan', 'manual', 'button'));
 -- Inti aturan "1 guru maksimal 1 absensi valid per sesi": dijamin oleh database.
 create unique index if not exists attendance_one_valid
     on absensi.attendance (session_id, user_id) where not voided;

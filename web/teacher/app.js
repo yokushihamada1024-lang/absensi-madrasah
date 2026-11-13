@@ -13,7 +13,8 @@ const root = document.getElementById("app");
 const slowBanner = document.getElementById("slow-banner");
 const netBanner = document.getElementById("net-banner");
 
-const state = { user: null, meta: null, scan: null, result: null, cleanup: [], devFake: null, installEvt: null };
+const state = { user: null, meta: null, scan: null, result: null, cleanup: [], devFake: null, installEvt: null,
+  buttonCheckin: false };
 
 configureApi({
   storage: {
@@ -166,7 +167,7 @@ function sessionItem(s) {
   } else if (s.is_open) {
     cls = "open";
     pill = el("span", { class: "pill pill-open" }, "Dibuka");
-    meta = "Silakan scan sekarang";
+    meta = state.buttonCheckin ? "Silakan scan atau konfirmasi sekarang" : "Silakan scan sekarang";
   } else {
     pill = el("span", { class: "pill pill-idle" }, "Belum hadir");
     meta = "Menunggu sesi dibuka";
@@ -228,12 +229,17 @@ function homeHero() {
     liveClock());
 }
 
-function scanButton(hint) {
+function scanButton(hint, alt) {
   return el("div", { class: "scan-wrap" },
     el("button", { class: "scan-cta", onclick: () => { haptic(15); go("/scan"); } },
       khatam("halo"), khatam("khatam"),
       el("span", { class: "label" }, icon("qr"), "Scan Absen")),
-    hint || null);
+    hint || null, alt || null);
+}
+
+/** Tautan ke fallback tanpa QR (hanya muncul bila admin mengizinkan). */
+function checkinLink(text = "Konfirmasi kehadiran tanpa QR") {
+  return el("button", { class: "btn btn-link alt-link", onclick: () => { haptic(10); go("/hadir"); } }, icon("pin"), text);
 }
 
 const HOME_REFRESH_MS = 20_000;
@@ -242,7 +248,8 @@ async function pageHome() {
   // Kerangka langsung tampil (jam & tombol scan); data menyusul dan disegarkan berkala (realtime).
   const body = el("div", {}, loading("Memuat ringkasan…"));
   const hint = el("p", { class: "scan-hint", "aria-live": "polite" });
-  const renderShell = () => view(homeHero(), scanButton(hint), body);
+  const alt = el("div", { class: "scan-alt" });
+  const renderShell = () => view(homeHero(), scanButton(hint, alt), body);
   if (state.user) renderShell(); // saat pertama buka, layar pembuka tetap tampil sampai profil dimuat
   try {
     await ensureUser();
@@ -266,7 +273,9 @@ async function pageHome() {
       const s = await api("/api/me/summary");
       if (!alive) return;
       // Hanya gambar ulang bila data berubah, agar tidak berkedip tiap penyegaran.
-      const key = JSON.stringify([s.today, s.meetings, s.estimated_gross, s.dates, s.period_status, s.current_rate]);
+      state.buttonCheckin = !!s.button_checkin;
+      const key = JSON.stringify([s.today, s.meetings, s.estimated_gross, s.dates, s.period_status, s.current_rate,
+        s.button_checkin]);
       if (key !== lastKey) {
         lastKey = key;
         drawSummary(s, first);
@@ -285,6 +294,7 @@ async function pageHome() {
     const rate = s.current_rate === null ? "Belum diatur" : rupiah(s.current_rate);
     const open = s.today.sessions.find((x) => x.is_open && !x.attended);
     hint.textContent = open ? `${open.name} sedang dibuka — silakan scan` : "";
+    alt.replaceChildren(...(open && s.button_checkin ? [checkinLink()] : []));
     const earn = el("div", { class: "v" }, rupiah(s.estimated_gross));
     const meetings = el("div", { class: "v" }, String(s.meetings));
     const enterCls = animate ? " enter" : "";
@@ -395,7 +405,9 @@ async function pageScan() {
     el("div", { class: "status-list" },
       el("div", { class: "status-line" }, camDot, camText),
       el("div", { class: "status-line" }, geoDot, geoText)),
-    camMsg, geoMsg, msg, retry, devPanel);
+    camMsg, geoMsg, msg, retry,
+    state.buttonCheckin ? el("div", { class: "alt-wrap" }, checkinLink("Kamera bermasalah? Konfirmasi tanpa QR")) : null,
+    devPanel);
 
   let lastPos = null;
   let busyScan = false;
@@ -517,6 +529,137 @@ async function pageScan() {
   }
 }
 
+// --- halaman: Konfirmasi kehadiran tanpa QR (fallback, bila diizinkan admin) ---------
+
+async function pageCheckin() {
+  if (!navigator.onLine) {
+    view(topbar(true), el("div", { class: "alert alert-err" }, "Tidak ada internet. Sambungkan dulu, lalu coba lagi."));
+    return;
+  }
+  view(topbar(true), loading("Memeriksa sesi…"));
+  let summary;
+  let active;
+  try {
+    [summary, active] = await Promise.all([api("/api/me/summary"), api("/api/sessions/active")]);
+  } catch (err) {
+    view(SAME, topbar(true), errorBox(err), el("button", { class: "btn", onclick: () => render() }, "Coba lagi"));
+    return;
+  }
+  state.buttonCheckin = !!summary.button_checkin;
+  const head = el("div", { class: "page-head" }, el("h1", {}, "Konfirmasi kehadiran"),
+    el("p", {}, "Tanpa scan QR. Lokasi Anda tetap diperiksa dan harus berada di dalam radius madrasah."));
+  const toScan = () => el("div", { class: "alt-wrap" },
+    el("button", { class: "btn btn-link alt-link", onclick: () => go("/scan") }, icon("qr"), "Scan QR saja"));
+  if (!summary.button_checkin) {
+    view(SAME, topbar(true), head,
+      el("div", { class: "alert alert-warn", role: "alert" }, "Absen tanpa QR sedang dinonaktifkan admin. Silakan scan QR."),
+      el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan QR"));
+    return;
+  }
+  const attended = new Set(summary.today.sessions.filter((x) => x.attended).map((x) => x.code));
+  const open = active.filter((x) => !attended.has(x.code));
+  if (!open.length) {
+    view(SAME, topbar(true), head,
+      active.length
+        ? el("div", { class: "alert alert-ok" }, "Anda sudah absen di sesi yang sedang dibuka.")
+        : emptyState("Belum ada sesi yang dibuka admin."),
+      el("button", { class: "btn", onclick: () => go("/") }, "Ke Beranda"));
+    return;
+  }
+
+  let picked = open[0];
+  const geoDot = el("span", { class: "dot wait" });
+  const geoText = el("span", {}, "Mencari lokasi…");
+  const geoMsg = el("div");
+  const msg = el("div");
+  const confirmBtn = el("button", { class: "btn btn-xl" }, icon("check"), "Konfirmasi hadir");
+  const sessionPick = open.length > 1
+    ? [el("h2", { class: "section-h" }, "Sesi", el("span", { class: "sub" }, "Pilih satu")),
+      chipGroup("Sesi", open.map((x) => x.name), picked.name, (v) => { picked = open.find((x) => x.name === v); })]
+    : [el("section", { class: "card" }, el("div", { class: "card-title" }, picked.name,
+      el("span", { class: "sub" }, `${picked.start_hhmm}–${picked.end_hhmm} WIB`)),
+      el("p", { class: "muted small" }, "Sesi ini sedang dibuka. Jam hadir dihitung saat Anda menekan konfirmasi."))];
+
+  let lastPos = null;
+  let sending = false;
+  const devPanel = el("div");
+  if (state.devFake) {
+    // Mode pengembangan: hanya di localhost DAN hanya jika server ENV=dev mengizinkan.
+    const lat = el("input", { type: "number", step: "any", value: String(state.devFake.lat ?? "") });
+    const lng = el("input", { type: "number", step: "any", value: String(state.devFake.lng ?? "") });
+    devPanel.append(el("section", { class: "card dev" },
+      el("strong", {}, "Mode dev — lokasi palsu"),
+      el("div", { class: "row" }, el("div", {}, el("label", {}, "Lat"), lat), el("div", {}, el("label", {}, "Lng"), lng)),
+      el("button", { class: "btn btn-ghost", onclick: () => {
+        lastPos = { timestamp: Date.now(), coords: { latitude: Number(lat.value), longitude: Number(lng.value), accuracy: 10 } };
+        geoDot.className = "dot ok";
+        geoText.textContent = "Lokasi palsu (dev) dipakai";
+        clear(geoMsg);
+      } }, "Pakai lokasi palsu (dev)")));
+  }
+
+  view(SAME, topbar(true), head, ...sessionPick,
+    el("div", { class: "status-list" }, el("div", { class: "status-line" }, geoDot, geoText)),
+    geoMsg, msg, devPanel, toScan(), el("div", { class: "save-bar" }, confirmBtn));
+
+  const stopGeo = watchPosition((p) => {
+    lastPos = p;
+    const acc = p.coords.accuracy;
+    geoDot.className = "dot " + (acc <= 75 ? "ok" : "warn");
+    geoText.textContent = `Lokasi didapat (akurasi ±${Math.round(acc)} m)`;
+    clear(geoMsg);
+  }, (e) => {
+    const kind = geoErrorKind(e);
+    if (kind === "denied") {
+      geoDot.className = "dot err";
+      geoText.textContent = "Izin lokasi ditolak";
+      clear(geoMsg).append(HELP.geoDenied());
+    } else if (!lastPos) {
+      geoDot.className = "dot warn";
+      geoText.textContent = kind === "timeout" ? "GPS lemah, masih mencari…" : "Lokasi belum tersedia, masih mencari…";
+    }
+  });
+  state.cleanup.push(stopGeo);
+
+  confirmBtn.addEventListener("click", async () => {
+    if (sending) return;
+    sending = true;
+    busy(confirmBtn, true);
+    clear(msg);
+    try {
+      let pos = lastPos;
+      if (!pos || Date.now() - pos.timestamp >= 20_000) {
+        geoText.textContent = "Memperbarui lokasi…";
+        try {
+          pos = await getPosition();
+        } catch (e) {
+          clear(msg).append(geoErrorKind(e) === "denied" ? HELP.geoDenied() : HELP.geoWeak(null));
+          haptic([20, 40, 20]);
+          return;
+        }
+      }
+      clear(msg).append(el("div", { class: "verify", role: "status" }, bars(5, { label: "" }),
+        el("strong", {}, "Memverifikasi lokasi…"), el("span", { class: "small" }, "Jangan tutup halaman ini.")));
+      const r = await api("/api/attendance/confirm", { method: "POST", body: {
+        session_id: picked.session_id, lat: pos.coords.latitude, lng: pos.coords.longitude,
+        accuracy_m: pos.coords.accuracy, position_ts: pos.timestamp, client_ts: Date.now() } });
+      state.scan = r;
+      sessionStorage.setItem(SCAN_KEY, JSON.stringify(r));
+      haptic(30);
+      go("/konfirmasi");
+    } catch (err) {
+      haptic([20, 40, 20]);
+      clear(msg).append(scanErrorView(err));
+      if (err instanceof ApiError && err.code === "ALREADY_ATTENDED") {
+        msg.append(el("button", { class: "btn", onclick: () => go("/") }, "Ke Beranda"));
+      }
+    } finally {
+      sending = false;
+      busy(confirmBtn, false);
+    }
+  });
+}
+
 // --- halaman: Konfirmasi (pilih kelas & mapel) -------------------------------
 
 function chipGroup(label, items, selected, onPick) {
@@ -537,10 +680,14 @@ async function pageConfirm() {
     try { state.scan = JSON.parse(sessionStorage.getItem(SCAN_KEY) || "null"); } catch { state.scan = null; }
   }
   const scan = state.scan;
+  const viaButton = !!scan && scan.method === "button";
+  const again = () => (viaButton
+    ? el("button", { class: "btn", onclick: () => go("/hadir") }, icon("pin"), "Konfirmasi ulang")
+    : el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan ulang"));
   if (!scan || new Date(scan.expires_at).getTime() < Date.now()) {
     sessionStorage.removeItem(SCAN_KEY);
-    view(topbar(true), el("div", { class: "alert alert-err" }, "Waktu memilih kelas habis. Silakan scan ulang."),
-      el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan ulang"));
+    view(topbar(true), el("div", { class: "alert alert-err" },
+      `Waktu memilih kelas habis. Silakan ${viaButton ? "konfirmasi" : "scan"} ulang.`), again());
     return;
   }
   view(topbar(true), loading());
@@ -566,9 +713,9 @@ async function pageConfirm() {
   const late = scan.status_preview === "late";
   view(SAME, topbar(true),
     el("section", { class: "ticket" + (late ? " late" : "") },
-      el("h3", {}, `QR valid · ${scan.session.name}`),
+      el("h3", {}, `${viaButton ? "Lokasi valid" : "QR valid"} · ${scan.session.name}`),
       el("p", {}, `Jam hadir ${hhmm(scan.scanned_at)} WIB — ${statusText(scan.status_preview, scan.late_min_preview)}`),
-      el("p", { class: "small" }, "Jam hadir dihitung saat scan, bukan saat menyimpan."),
+      el("p", { class: "small" }, `Jam hadir dihitung saat ${viaButton ? "konfirmasi" : "scan"}, bukan saat menyimpan.`),
       timerPill),
     el("h2", { class: "section-h" }, "Kelas", el("span", { class: "sub" }, "Pilih satu")),
     chipGroup("Kelas", meta.kelas, kelas, (v) => { kelas = v; refresh(); }),
@@ -593,7 +740,7 @@ async function pageConfirm() {
       msg.append(errorBox(err));
       if (err instanceof ApiError && ["TICKET_EXPIRED", "TICKET_INVALID"].includes(err.code)) {
         save.disabled = true;
-        msg.append(el("button", { class: "btn", onclick: () => go("/scan") }, icon("qr"), "Scan ulang"));
+        msg.append(again());
       } else if (err instanceof ApiError && err.code === "ALREADY_ATTENDED") {
         save.disabled = true;
         msg.append(el("button", { class: "btn", onclick: () => go("/") }, "Ke Beranda"));
@@ -662,7 +809,7 @@ async function pageHistory() {
 
 // --- router ---------------------------------------------------------------------
 
-const ROUTES = { "/login": pageLogin, "/": pageHome, "/scan": pageScan, "/konfirmasi": pageConfirm,
+const ROUTES = { "/login": pageLogin, "/": pageHome, "/scan": pageScan, "/hadir": pageCheckin, "/konfirmasi": pageConfirm,
   "/selesai": pageDone, "/riwayat": pageHistory };
 
 function render() {

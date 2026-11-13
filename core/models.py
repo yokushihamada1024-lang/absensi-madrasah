@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 
 Role = Literal["admin", "guru"]
 Status = Literal["on_time", "late"]
-Source = Literal["scan", "manual"]
+Source = Literal["scan", "manual", "button"]  # button = konfirmasi tanpa QR (fallback)
 
 
 class AppError(Exception):
@@ -32,6 +32,7 @@ class Settings(BaseModel):
     qr_rotate_sec: int = Field(30, ge=10, le=300)
     grace_min: int = Field(5, ge=0, le=180)
     early_open_min: int = Field(20, ge=0, le=180)
+    allow_button_checkin: bool = False  # fallback: absen tanpa QR, tetap wajib di dalam radius
     timezone: str = "Asia/Jakarta"
 
     @field_validator("lat")

@@ -37,6 +37,17 @@ class ScanIn(Strict):
     client_ts: float | None = Field(default=None, gt=0, description="Date.now() saat kirim (ms, jam HP)")
 
 
+class ConfirmIn(Strict):
+    """Konfirmasi kehadiran tanpa QR (fallback): sesi dipilih langsung, lokasi tetap wajib."""
+
+    session_id: str = Field(min_length=1, max_length=64)
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    accuracy_m: float = Field(ge=0, le=100_000)
+    position_ts: float = Field(gt=0, description="position.timestamp (ms epoch, jam HP)")
+    client_ts: float | None = Field(default=None, gt=0, description="Date.now() saat kirim (ms, jam HP)")
+
+
 class SubmitIn(Strict):
     ticket: str = Field(min_length=1, max_length=2000)
     kelas: str = Field(min_length=1, max_length=64)
@@ -101,6 +112,7 @@ class SettingsIn(Strict):
     qr_rotate_sec: int = Field(ge=10, le=300)
     grace_min: int = Field(ge=0, le=180)
     early_open_min: int = Field(ge=0, le=180)
+    allow_button_checkin: bool = False
 
 
 class NamedItemIn(Strict):

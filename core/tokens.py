@@ -100,6 +100,7 @@ class Ticket:
     accuracy_m: float
     lat: float
     lng: float
+    method: str = "scan"  # "scan" (QR) atau "button" (konfirmasi tanpa QR)
 
 
 def issue_ticket(jwt_secret: str, t: Ticket) -> tuple[str, datetime]:
@@ -114,6 +115,7 @@ def issue_ticket(jwt_secret: str, t: Ticket) -> tuple[str, datetime]:
         "acc": t.accuracy_m,
         "lat": t.lat,
         "lng": t.lng,
+        "mth": t.method,
         "iat": int(t.scanned_at.timestamp()),
         "exp": int(exp.timestamp()),
     }
@@ -135,6 +137,9 @@ def decode_ticket(jwt_secret: str, token: str, now: datetime) -> Ticket:
     # exp dicek manual memakai jam yang diinjeksi (testable)
     if now.timestamp() > p["exp"]:
         raise AppError("TICKET_EXPIRED", "Waktu memilih kelas habis (5 menit). Silakan scan ulang.", 400)
+    method = p.get("mth", "scan")
+    if method not in ("scan", "button"):
+        raise AppError("TICKET_INVALID", "Tiket absen tidak valid. Silakan scan ulang.", 400)
     return Ticket(
         ticket_id=p["tid"],
         session_id=p["sid"],
@@ -144,4 +149,5 @@ def decode_ticket(jwt_secret: str, token: str, now: datetime) -> Ticket:
         accuracy_m=p["acc"],
         lat=p["lat"],
         lng=p["lng"],
+        method=method,
     )

@@ -1,4 +1,4 @@
-"""Sesi, scan QR, submit absensi, input manual, void."""
+"""Sesi, scan QR, konfirmasi tanpa QR (fallback), submit absensi, input manual, void."""
 
 from __future__ import annotations
 
@@ -47,6 +47,7 @@ class ScanResult:
     scanned_at: datetime
     distance_m: float
     accuracy_m: float
+    method: str = "scan"
 
 
 @dataclass
@@ -217,29 +218,73 @@ class AttendanceService:
             s = self.repo.sessions.get(session_id)
             if s is None:
                 raise AppError("TOKEN_INVALID", "QR tidak dikenali. Scan QR di layar admin.", 400)
-            check_window(s, settings, now)
-            if any(
-                not a.voided
-                for a in self.repo.attendance.list(AttendanceFilter(session_id=session_id, user_id=user.user_id))
-            ):
-                raise AppError("ALREADY_ATTENDED", "Anda sudah absen di sesi ini.", 409)
-            loc = check_location(settings, lat, lng, accuracy_m, position_ts_ms, now, client_ts_ms)
-            t = tokens.Ticket(
-                ticket_id=str(uuid.uuid4()),
-                session_id=session_id,
-                user_id=user.user_id,
-                scanned_at=now,
-                distance_m=loc.distance_m,
-                accuracy_m=accuracy_m,
-                lat=lat,
-                lng=lng,
-            )
-            jwt_str, exp = tokens.issue_ticket(self.jwt_secret, t)
-            return ScanResult(ticket=jwt_str, expires_at=exp, session=s, scanned_at=now,
-                              distance_m=loc.distance_m, accuracy_m=accuracy_m)
+            return self._issue_ticket(user, s, settings, now, lat, lng, accuracy_m, position_ts_ms, client_ts_ms,
+                                      "scan")
         except AppError as e:
             self._log_attempt(user.user_id, session_id, e)
             raise
+
+    def confirm(
+        self,
+        user: User,
+        session_id: str,
+        lat: float,
+        lng: float,
+        accuracy_m: float,
+        position_ts_ms: float,
+        client_ts_ms: float | None = None,
+    ) -> ScanResult:
+        """Fallback tanpa QR: hanya jika diizinkan admin. Jam sesi & geofence tetap sama dengan scan."""
+        sid = ""
+        try:
+            now = self.clock()
+            settings = self.repo.settings.get()
+            if not settings.allow_button_checkin:
+                raise AppError("BUTTON_DISABLED", "Absen tanpa QR sedang dinonaktifkan admin. Silakan scan QR.", 403)
+            s = self.repo.sessions.get(session_id)
+            if s is None:
+                raise AppError("SESSION_NOT_FOUND", "Sesi tidak ditemukan.", 404)
+            sid = s.session_id
+            return self._issue_ticket(user, s, settings, now, lat, lng, accuracy_m, position_ts_ms, client_ts_ms,
+                                      "button")
+        except AppError as e:
+            self._log_attempt(user.user_id, sid, e)
+            raise
+
+    def _issue_ticket(
+        self,
+        user: User,
+        s: SessionInstance,
+        settings: Settings,
+        now: datetime,
+        lat: float,
+        lng: float,
+        accuracy_m: float,
+        position_ts_ms: float,
+        client_ts_ms: float | None,
+        method: str,
+    ) -> ScanResult:
+        check_window(s, settings, now)
+        if any(
+            not a.voided
+            for a in self.repo.attendance.list(AttendanceFilter(session_id=s.session_id, user_id=user.user_id))
+        ):
+            raise AppError("ALREADY_ATTENDED", "Anda sudah absen di sesi ini.", 409)
+        loc = check_location(settings, lat, lng, accuracy_m, position_ts_ms, now, client_ts_ms)
+        t = tokens.Ticket(
+            ticket_id=str(uuid.uuid4()),
+            session_id=s.session_id,
+            user_id=user.user_id,
+            scanned_at=now,
+            distance_m=loc.distance_m,
+            accuracy_m=accuracy_m,
+            lat=lat,
+            lng=lng,
+            method=method,
+        )
+        jwt_str, exp = tokens.issue_ticket(self.jwt_secret, t)
+        return ScanResult(ticket=jwt_str, expires_at=exp, session=s, scanned_at=now,
+                          distance_m=loc.distance_m, accuracy_m=accuracy_m, method=method)
 
     def submit(self, user: User, ticket: str, kelas: str, mapel: str) -> Attendance:
         session_id = ""
@@ -281,7 +326,7 @@ class AttendanceService:
                     status=status,
                     late_min=late,
                     rate_snapshot=self._rate_for(user.user_id, s.date),
-                    source="scan",
+                    source=t.method,
                     ticket_id=t.ticket_id,
                 )
                 return self._insert(a)

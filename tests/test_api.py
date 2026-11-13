@@ -344,3 +344,37 @@ def test_rate_limiter_purges_old_keys(clock):
     rl.fail("baru", "1.1.1.1")
     assert len(rl._fails) <= 2
     assert rl.retry_after("baru", "1.1.1.1") == 0
+
+
+def test_button_checkin_via_api(env):
+    client, repo, clock = env
+    ha, hg = login(client, "admin"), login(client, "gurua")
+    clock.set_wib(TODAY, "13:25")
+    s = client.post("/api/admin/sessions/open", headers=ha, json={"code": "S1"}).json()
+    ms = clock().timestamp() * 1000
+    body = {"session_id": s["session_id"], "lat": MADRASAH[0], "lng": MADRASAH[1], "accuracy_m": 12,
+            "position_ts": ms, "client_ts": ms}
+    assert client.get("/api/me/summary", headers=hg).json()["button_checkin"] is False
+    r = client.post("/api/attendance/confirm", headers=hg, json=body)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "BUTTON_DISABLED"
+
+    st = client.get("/api/admin/settings", headers=ha).json()
+    st.pop("timezone")
+    st["allow_button_checkin"] = True
+    assert client.put("/api/admin/settings", headers=ha, json=st).json()["allow_button_checkin"] is True
+    assert client.get("/api/me/summary", headers=hg).json()["button_checkin"] is True
+
+    far = dict(body, lat=MADRASAH[0] + 0.003)
+    r = client.post("/api/attendance/confirm", headers=hg, json=far)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "OUT_OF_RANGE"
+    r = client.post("/api/attendance/confirm", headers=hg, json=body)
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["method"] == "button" and t["session"]["session_id"] == s["session_id"]
+    r = client.post("/api/attendance/submit", headers=hg, json={"ticket": t["ticket"], "kelas": "Umar",
+                                                                "mapel": "Fikih"})
+    assert r.status_code == 200 and r.json()["source"] == "button"
+    rows = client.get("/api/admin/attendance", headers=ha).json()
+    assert rows[0]["source"] == "button"
+    # admin tidak boleh memakai endpoint guru
+    assert client.post("/api/attendance/confirm", headers=ha, json=body).status_code == 403

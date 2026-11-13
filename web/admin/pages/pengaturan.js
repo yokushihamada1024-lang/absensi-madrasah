@@ -20,6 +20,22 @@ function settingsCard(s) {
   const grace = input({ type: "number", min: "0", max: "180", value: s.grace_min });
   const early = input({ type: "number", min: "0", max: "180", value: s.early_open_min });
   const rotate = input({ type: "number", min: "10", max: "300", value: s.qr_rotate_sec });
+  const btnCheckin = el("input", { type: "checkbox", class: "switch", role: "switch", checked: !!s.allow_button_checkin,
+    id: "allow-button", "aria-describedby": "allow-button-help" });
+  const btnState = el("span", { class: "item-state" });
+  const btnRow = el("div", { class: "opt-toggle" },
+    el("div", { class: "opt-text" },
+      el("label", { for: "allow-button" }, "Izinkan absen tanpa QR (tombol konfirmasi)"),
+      el("p", { class: "muted small", id: "allow-button-help" },
+        "Cadangan bila layar QR atau kamera HP guru bermasalah. Guru tetap harus berada di dalam radius dan di jam sesi. ",
+        "Lebih rawan GPS palsu daripada QR, jadi aktifkan seperlunya. Absen lewat tombol ditandai “Tombol” di halaman Absensi.")),
+    btnState, btnCheckin);
+  const paintBtn = () => {
+    btnRow.classList.toggle("off", !btnCheckin.checked);
+    btnState.textContent = btnCheckin.checked ? "Aktif" : "Nonaktif";
+  };
+  paintBtn();
+  btnCheckin.addEventListener("change", paintBtn);
   const mapEl = el("div", { class: "map", role: "application", "aria-label": "Peta lokasi madrasah" });
   const gpsBtn = act("pin", "Pakai lokasi saya sekarang", { size: "sm" });
   const gpsMsg = el("span", { class: "muted small" });
@@ -36,6 +52,7 @@ function settingsCard(s) {
       field("Toleransi telat (menit)", grace),
       field("Buka scan sebelum mulai (menit)", early),
       field("Rotasi QR (detik)", rotate)),
+    btnRow,
     cardFoot(save));
 
   // --- Peta Leaflet (di-vendor) + tile OpenStreetMap ---
@@ -113,6 +130,7 @@ function settingsCard(s) {
       await api("/api/admin/settings", { method: "PUT", body: {
         madrasah_name: name.value.trim(), lat: la, lng: lo, radius_m: num(radius.value), max_accuracy_m: num(acc.value),
         grace_min: num(grace.value), early_open_min: num(early.value), qr_rotate_sec: num(rotate.value),
+        allow_button_checkin: btnCheckin.checked,
       } });
       toast("Pengaturan disimpan.");
     } catch (err) {
