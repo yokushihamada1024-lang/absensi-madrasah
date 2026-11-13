@@ -19,9 +19,9 @@ export async function pageDashboard() {
   mount(el("h1", {}, "Hari ini"), loading());
   const today = todayWib();
   const [sess, att, attempts] = await Promise.all([
-    api("/api/admin/sessions/today"),
-    api(`/api/admin/attendance?date=${today}&include_voided=false`),
-    api(`/api/admin/attempts?date=${today}`),
+    api("/api/admin/sessions/today", { cache: true }),
+    api(`/api/admin/attendance?date=${today}&include_voided=false`, { cache: true }),
+    api(`/api/admin/attempts?date=${today}`, { cache: true }),
   ]);
   const cards = sess.sessions.map((s) => {
     const open = s.session?.is_open;

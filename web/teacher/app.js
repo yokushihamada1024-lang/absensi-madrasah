@@ -1,5 +1,5 @@
 // PWA Guru — vanilla JS; DOM dibangun lewat el()/textContent (tidak ada HTML mentah).
-import { api, ApiError, clearToken, configureApi, getToken, setToken, warmUp } from "./shared/api.js";
+import { api, ApiError, clearToken, configureApi, getToken, newNavigation, setToken, warmUp } from "./shared/api.js";
 import { clear, el, hhmm, periode, periodNow, rupiah, shiftPeriod, statusText, tanggal, tanggalPendek, todayWib,
   wibParts } from "./shared/format.js";
 import { bars, busy, countUp, dismissBoot, enter, haptic, icon, installRipple, khatam, loadingBlock } from "./shared/fx.js";
@@ -14,7 +14,7 @@ const slowBanner = document.getElementById("slow-banner");
 const netBanner = document.getElementById("net-banner");
 
 const state = { user: null, meta: null, scan: null, result: null, cleanup: [], devFake: null, installEvt: null,
-  buttonCheckin: false };
+  buttonCheckin: false, onRevalidated: null };
 
 configureApi({
   storage: {
@@ -24,6 +24,8 @@ configureApi({
   },
   slow: (on) => { slowBanner.hidden = !on; },
   unauthorized: () => { clearToken(); state.user = null; go("/login"); },
+  // Halaman tampil dari cache; versi terbaru dari server berbeda → halaman aktif menggambar ulang.
+  revalidated: () => state.onRevalidated?.(),
 });
 
 // --- util ------------------------------------------------------------------
@@ -274,6 +276,7 @@ async function pageHome() {
   let timer = null;
   let inflight = false;
   let dayDone = false;
+  state.onRevalidated = () => load();
 
   // Hemat jam server (Render Free): segarkan hanya saat aplikasi terlihat, dan berhenti bila semua sesi
   // hari ini sudah selesai/sudah diabsen. Membuka ulang aplikasi tetap langsung memuat data terbaru.
@@ -289,7 +292,11 @@ async function pageHome() {
     inflight = true;
     clearTimeout(timer);
     try {
-      const s = await api("/api/me/summary");
+      // Cache: Beranda langsung terisi saat kembali dari halaman lain; data terbaru menyusul lewat
+      // state.onRevalidated (= load lagi, kali ini dari cache yang baru diperbarui). fresh 2 dtk: kembali ke
+      // Beranda / membuka aplikasi selalu memicu ambil data baru (sesi yang baru dibuka admin tidak tertunda);
+      // jeda 2 dtk hanya agar gambar ulang dari onRevalidated tidak memicu request kedua.
+      const s = await api("/api/me/summary", { cache: true, fresh: 2_000 });
       if (!alive) return;
       dayDone = isDayDone(s);
       // Hanya gambar ulang bila data berubah, agar tidak berkedip tiap penyegaran.
@@ -807,8 +814,14 @@ async function pageHistory() {
     el("button", { class: "btn btn-ghost", "aria-label": "Bulan berikutnya", disabled: month >= periodNow(),
       onclick: () => go(`/riwayat?m=${shiftPeriod(month, 1)}`) }, icon("next")));
   view(topbar(true), nav, loading());
+  const show = () => showHistory(month, nav);
+  state.onRevalidated = show; // data cache diganti versi terbaru → gambar ulang tanpa animasi masuk
+  await show();
+}
+
+async function showHistory(month, nav) {
   try {
-    const s = await api(`/api/me/summary?month=${encodeURIComponent(month)}`);
+    const s = await api(`/api/me/summary?month=${encodeURIComponent(month)}`, { cache: true });
     const items = s.attendance.map((a) => el("li", {},
       el("div", {}, el("div", { class: "when" }, tanggal(a.date, true)),
         el("div", { class: "sub" }, `${a.code} · ${a.time_hhmm} · ${a.kelas} · ${a.mapel}`)),
@@ -836,6 +849,8 @@ const ROUTES = { "/login": pageLogin, "/": pageHome, "/scan": pageScan, "/hadir"
   "/selesai": pageDone, "/riwayat": pageHistory };
 
 function render() {
+  newNavigation(); // GET halaman sebelumnya dibatalkan & dibuang — tidak bisa menimpa halaman ini
+  state.onRevalidated = null;
   const path = (location.hash.slice(1) || "/").split("?")[0];
   if (!getToken() && path !== "/login") { go("/login"); return; }
   if (getToken() && path === "/login") { go("/"); return; }

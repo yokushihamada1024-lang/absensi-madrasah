@@ -39,7 +39,7 @@ function periodNav(period) {
 export async function pagePenggajian() {
   const period = currentPeriod();
   mount(el("h1", {}, "Penggajian"), loading());
-  const data = await api(`/api/admin/payroll?period=${period}`);
+  const data = await api(`/api/admin/payroll?period=${period}`, { cache: true });
   const zipBtn = act("download", "Unduh semua slip (ZIP)", { variant: "primary" });
   zipBtn.addEventListener("click", () => dl(zipBtn, `/api/admin/payroll/${period}/slips.zip`, `slip-gaji-${period}.zip`));
 

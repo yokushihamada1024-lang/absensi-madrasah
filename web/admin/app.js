@@ -1,5 +1,5 @@
 // Admin Web — router hash + layout. Token disimpan di sessionStorage (8 jam).
-import { api, clearToken, configureApi, getToken, setToken, warmUp } from "./shared/api.js";
+import { api, clearToken, configureApi, getToken, newNavigation, setToken, warmUp } from "./shared/api.js";
 import { alertBox, busy, clear, el, errMsg, field, input } from "./ui.js";
 import { dismissBoot, enter, installRipple, khatam } from "./shared/fx.js";
 import { pageDashboard } from "./pages/dashboard.js";
@@ -31,6 +31,13 @@ configureApi({
   },
   slow: (on) => { slowBanner.hidden = !on; },
   unauthorized: () => { clearToken(); ctx.user = null; go("/login"); },
+  // Data dari cache sudah tampil; versi terbaru dari server berbeda → gambar ulang diam-diam.
+  // Jangan ganggu admin yang sedang mengisi form/dialog — versi baru tampil saat halaman dibuka lagi.
+  revalidated: () => {
+    const f = document.activeElement;
+    if (document.querySelector("dialog[open]") || (f && root.contains(f) && f.matches("input, select, textarea"))) return;
+    render();
+  },
 });
 
 export function go(path) {
@@ -109,6 +116,7 @@ const ROUTES = {
 
 async function render() {
   runCleanup();
+  newNavigation(); // GET halaman sebelumnya dibatalkan & dibuang — tidak bisa menimpa halaman ini
   const path = (location.hash.slice(1) || "/dashboard").split("?")[0];
   if (path === "/login" || !getToken()) {
     if (path !== "/login") { go("/login"); return; }

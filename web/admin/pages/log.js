@@ -34,7 +34,7 @@ export async function pageLog() {
     el("button", { class: "btn", role: "tab", "aria-selected": String(tab === "audit"),
       onclick: () => { location.hash = "#/log?t=audit"; } }, "Audit"));
   if (tab === "attempts") {
-    const rows = await api("/api/admin/attempts?limit=300");
+    const rows = await api("/api/admin/attempts?limit=300", { cache: true });
     mount(el("h1", {}, "Log"), tabs,
       el("p", { class: "muted" }, "300 percobaan absen gagal terakhir. Pola berulang (mis. jarak jauh terus-menerus) patut dicek."),
       table([
@@ -46,7 +46,7 @@ export async function pageLog() {
         { label: "Detail", render: (a) => jsonCell(a.detail) },
       ], rows, { empty: "Belum ada percobaan gagal." }));
   } else {
-    const rows = await api("/api/admin/audit?limit=300");
+    const rows = await api("/api/admin/audit?limit=300", { cache: true });
     mount(el("h1", {}, "Log"), tabs,
       el("p", { class: "muted" }, "300 perubahan terakhir oleh admin/sistem."),
       table([

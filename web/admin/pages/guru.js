@@ -115,7 +115,7 @@ async function rates(u) {
 
 export async function pageGuru() {
   mount(el("h1", {}, "Guru"), loading());
-  const users = await api("/api/admin/users");
+  const users = await api("/api/admin/users", { cache: true });
   users.sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === "guru" ? -1 : 1));
   mount(
     el("div", { class: "page-head" },

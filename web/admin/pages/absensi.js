@@ -55,9 +55,9 @@ export async function pageAbsensi() {
   mount(el("h1", {}, "Absensi"), loading());
   const f = readFilters();
   const [users, meta, rows] = await Promise.all([
-    api("/api/admin/users"),
-    api("/api/meta"),
-    api(`/api/admin/attendance?from=${f.from}&to=${f.to}${f.user_id ? `&user_id=${encodeURIComponent(f.user_id)}` : ""}`),
+    api("/api/admin/users", { cache: true }),
+    api("/api/meta", { cache: true }),
+    api(`/api/admin/attendance?from=${f.from}&to=${f.to}${f.user_id ? `&user_id=${encodeURIComponent(f.user_id)}` : ""}`, { cache: true }),
   ]);
   const gurus = users.filter((u) => u.role === "guru").sort((a, b) => a.name.localeCompare(b.name));
   const from = input({ type: "date", value: f.from });
