@@ -23,3 +23,10 @@ def test_create_admin():
 def test_verify_pin_unknown_user_is_false():
     assert verify_pin(None, "123456") is False
     assert verify_pin("bukan-hash", "123456") is False
+
+
+def test_simulate_day_runs(capsys):
+    from scripts.simulate_day import main
+
+    assert main() == 0
+    assert "Smoke test OK" in capsys.readouterr().out
