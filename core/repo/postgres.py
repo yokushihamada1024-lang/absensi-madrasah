@@ -19,6 +19,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from core.models import (
+    AppError,
     Attempt,
     Attendance,
     AuditEntry,
@@ -74,12 +75,19 @@ def _cols(cls: type[BaseModel], exclude: tuple[str, ...] = ()) -> list[str]:
 
 class Database:
     def __init__(self, dsn: str, max_size: int = 4) -> None:
+        self._dsn = dsn
+        self._max_size = max_size
+        self._pool = self._new_pool()
+        self._opened = False
+        self._open_lock = threading.Lock()
+
+    def _new_pool(self) -> Any:
         from psycopg_pool import ConnectionPool
 
-        self._pool = ConnectionPool(
-            dsn,
+        return ConnectionPool(
+            self._dsn,
             min_size=1,
-            max_size=max_size,
+            max_size=self._max_size,
             open=False,
             timeout=30,
             max_idle=120,
@@ -87,14 +95,23 @@ class Database:
             kwargs={"prepare_threshold": None, "autocommit": True},
             name="absensi",
         )
-        self._opened = False
-        self._open_lock = threading.Lock()
 
     def _ensure_open(self) -> None:
         if not self._opened:
             with self._open_lock:
                 if not self._opened:
-                    self._pool.open(wait=True, timeout=60)
+                    from psycopg_pool import PoolTimeout
+
+                    try:
+                        self._pool.open(wait=True, timeout=45)
+                    except PoolTimeout:
+                        # Hentikan percobaan di latar belakang: login gagal berulang (mis. password salah)
+                        # membuat pooler Supabase memblokir sementara (circuit breaker). Coba lagi di request
+                        # berikutnya dengan pool baru.
+                        self._pool.close()
+                        self._pool = self._new_pool()
+                        raise AppError("DB_UNAVAILABLE", "Database tidak bisa dihubungi. Coba lagi sebentar lagi.",
+                                       500) from None
                     self._opened = True
 
     @contextmanager
