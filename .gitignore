@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Secrets — JANGAN pernah commit
+.env
+.env.*
+!.env.example
+*service-account*.json
+*credentials*.json
+secrets/
+
+# Artefak build static site (dibuat oleh build command)
+web/teacher/shared/
+web/admin/shared/
+web/teacher/config.js
+web/admin/config.js
+
+# Output lokal
+out/
+*.pdf
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
