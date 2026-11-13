@@ -1,7 +1,7 @@
 """Slip gaji PDF (reportlab, A4) dan ZIP semua slip.
 
-Visual mengikuti design system web ("lapis & ubin"): pita kepala biru tinta dengan tekstur bintang
-delapan (khatam), aksen kuningan, tabel tenang bergaris tipis, dan kartu Take Home Pay sebagai fokus.
+Visual mengikuti design system web ("lapis & ubin") dengan gaya kop surat: pita tinta tipis + garis
+kuningan, kop dua baris yang lapang, tabel bergaris tipis, dan bar Take Home Pay sebagai fokus.
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether, PageTemplate, Paragraph, Spacer, Table,
-                                TableStyle)
+from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, KeepTogether, PageTemplate, Paragraph, Spacer,
+                                Table, TableStyle)
 
 from core.money import format_rupiah
 from core.payroll import PayrollLine
@@ -38,8 +39,9 @@ OK, OK_SOFT = colors.HexColor("#0b7a6d"), colors.HexColor("#e3f5f1")
 WARN, WARN_SOFT = colors.HexColor("#a14a07"), colors.HexColor("#fdf1dc")
 
 PAGE_W, PAGE_H = A4
-MARGIN = 16 * mm
-BAND_H = 40 * mm  # tinggi pita kepala di halaman pertama
+MARGIN = 18 * mm
+HEADER_H = 30 * mm      # tinggi blok kop biru di halaman pertama
+FOOTER_Y = 12 * mm
 CONTENT_W = PAGE_W - 2 * MARGIN
 
 
@@ -49,27 +51,36 @@ def _styles() -> dict[str, ParagraphStyle]:
                           textColor=TEXT)
     return {
         "base": base,
-        "label": ParagraphStyle("label", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9,
-                                textColor=FAINT),
-        "value": ParagraphStyle("value", parent=base, fontName="Helvetica-Bold", fontSize=10.5, leading=13),
-        "value_sub": ParagraphStyle("value_sub", parent=base, fontSize=8.2, leading=10.5, textColor=MUTED),
+        "eyebrow": ParagraphStyle("eyebrow", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9,
+                                  textColor=FAINT),
+        "name": ParagraphStyle("name", parent=base, fontName="Helvetica-Bold", fontSize=16, leading=19,
+                               textColor=INK),
+        "name_sub": ParagraphStyle("name_sub", parent=base, fontSize=8.4, leading=11, textColor=MUTED),
+        "kv_l": ParagraphStyle("kv_l", parent=base, fontSize=8.4, leading=11, textColor=MUTED),
+        "kv_r": ParagraphStyle("kv_r", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
+                               alignment=TA_RIGHT),
+        "kv_warn": ParagraphStyle("kv_warn", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
+                                  alignment=TA_RIGHT, textColor=WARN),
         "h2": ParagraphStyle("h2", parent=base, fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=INK),
+        "th": ParagraphStyle("th", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9, textColor=FAINT),
+        "thr": ParagraphStyle("thr", parent=base, fontName="Helvetica-Bold", fontSize=6.8, leading=9,
+                              textColor=FAINT, alignment=TA_RIGHT),
         "cell": ParagraphStyle("cell", parent=base, fontSize=8.6, leading=11),
-        "cell_muted": ParagraphStyle("cell_muted", parent=base, fontSize=8.6, leading=11, textColor=MUTED),
-        "cellr": ParagraphStyle("cellr", parent=base, fontSize=8.6, leading=11, alignment=TA_RIGHT),
-        "ok": ParagraphStyle("ok", parent=base, fontName="Helvetica-Bold", fontSize=8.2, leading=11, textColor=OK),
-        "warn": ParagraphStyle("warn", parent=base, fontName="Helvetica-Bold", fontSize=8.2, leading=11,
-                               textColor=WARN),
-        "sum_l": ParagraphStyle("sum_l", parent=base, fontSize=9, leading=12, textColor=MUTED),
-        "sum_r": ParagraphStyle("sum_r", parent=base, fontName="Helvetica-Bold", fontSize=9, leading=12,
+        "cell_muted": ParagraphStyle("cell_muted", parent=base, fontSize=8.6, leading=11, textColor=FAINT),
+        "cellr": ParagraphStyle("cellr", parent=base, fontName="Helvetica-Bold", fontSize=8.6, leading=11,
                                 alignment=TA_RIGHT),
-        "thp_label": ParagraphStyle("thp_label", parent=base, fontName="Helvetica-Bold", fontSize=8, leading=10,
+        "ok": ParagraphStyle("ok", parent=base, fontSize=8.4, leading=11, textColor=OK),
+        "warn": ParagraphStyle("warn", parent=base, fontSize=8.4, leading=11, textColor=WARN),
+        "sum_l": ParagraphStyle("sum_l", parent=base, fontSize=8.8, leading=12, textColor=MUTED),
+        "sum_r": ParagraphStyle("sum_r", parent=base, fontName="Helvetica-Bold", fontSize=8.8, leading=12,
+                                alignment=TA_RIGHT),
+        "thp_label": ParagraphStyle("thp_label", parent=base, fontName="Helvetica-Bold", fontSize=7, leading=9,
                                     textColor=BRASS_300),
-        "thp_value": ParagraphStyle("thp_value", parent=base, fontName="Helvetica-Bold", fontSize=20, leading=24,
-                                    textColor=colors.white),
-        "thp_sub": ParagraphStyle("thp_sub", parent=base, fontSize=7.8, leading=10,
+        "thp_sub": ParagraphStyle("thp_sub", parent=base, fontSize=7.6, leading=10,
                                   textColor=colors.HexColor("#b9c5db")),
-        "note": ParagraphStyle("note", parent=base, fontSize=7.8, leading=10.5, textColor=MUTED),
+        "thp_value": ParagraphStyle("thp_value", parent=base, fontName="Helvetica-Bold", fontSize=18, leading=22,
+                                    textColor=colors.white, alignment=TA_RIGHT),
+        "note": ParagraphStyle("note", parent=base, fontSize=7.8, leading=11, textColor=MUTED),
     }
 
 
@@ -88,15 +99,44 @@ def _khatam(canvas, cx: float, cy: float, size: float) -> None:
     canvas.restoreState()
 
 
-def _pill(canvas, x_right: float, y: float, text: str, fg, bg) -> None:
-    canvas.setFont("Helvetica-Bold", 7.5)
-    tw = canvas.stringWidth(text, "Helvetica-Bold", 7.5)
-    w, h = tw + 14, 14
-    canvas.setFillColor(bg)
-    canvas.roundRect(x_right - w, y, w, h, h / 2, stroke=0, fill=1)
-    canvas.setFillColor(fg)
-    canvas.circle(x_right - w + 7, y + h / 2, 1.8, stroke=0, fill=1)
-    canvas.drawRightString(x_right - 5, y + 4.2, text)
+def _spaced(canvas, x: float, y: float, text: str, font: str, size: float, space: float,
+            align: str = "left") -> None:
+    """Teks kapital berjarak (tracking); align 'right' menghitung lebar termasuk jaraknya."""
+    w = stringWidth(text, font, size) + space * (len(text) - 1)
+    t = canvas.beginText(x - w if align == "right" else x, y)
+    t.setFont(font, size)
+    t.setCharSpace(space)
+    t.textOut(text)
+    canvas.drawText(t)
+
+
+class Pill(Flowable):
+    """Label status berbentuk kapsul: titik + teks berjarak, padding simetris, teks di tengah vertikal."""
+
+    FONT, SIZE, TRACK, H, PAD, DOT, GAP = "Helvetica-Bold", 6.8, 1.0, 13.5, 7.0, 1.7, 4.0
+
+    def __init__(self, text: str, fg, bg, border) -> None:
+        super().__init__()
+        self.text, self.fg, self.bg, self.border = text, fg, bg, border
+        tw = stringWidth(text, self.FONT, self.SIZE) + self.TRACK * (len(text) - 1)
+        self.width = self.PAD + self.DOT * 2 + self.GAP + tw + self.PAD
+        self.height = self.H
+
+    def wrap(self, *_):
+        return self.width, self.height
+
+    def draw(self) -> None:
+        c = self.canv
+        c.saveState()
+        c.setFillColor(self.bg)
+        c.setStrokeColor(self.border)
+        c.setLineWidth(0.6)
+        c.roundRect(0, 0, self.width, self.H, self.H / 2, stroke=1, fill=1)
+        c.setFillColor(self.fg)
+        c.circle(self.PAD + self.DOT, self.H / 2, self.DOT, stroke=0, fill=1)
+        base = (self.H - self.SIZE * 0.72) / 2  # cap-height Helvetica ≈ 0,72 em
+        _spaced(c, self.PAD + self.DOT * 2 + self.GAP, base, self.text, self.FONT, self.SIZE, self.TRACK)
+        c.restoreState()
 
 
 def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[str, str], printed_at: datetime) -> bytes:
@@ -108,159 +148,140 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
     printed = format_datetime_id(printed_at)
 
     def draw_common(canvas) -> None:
-        if not final:  # watermark DRAFT, halus agar tabel tetap terbaca
+        if not final:  # watermark DRAFT, sangat halus agar tabel tetap terbaca
             canvas.saveState()
-            canvas.setFont("Helvetica-Bold", 96)
-            canvas.setFillColor(colors.Color(0.63, 0.29, 0.03, alpha=0.06))
-            canvas.translate(PAGE_W / 2, PAGE_H / 2 - 20 * mm)
-            canvas.rotate(35)
+            canvas.setFont("Helvetica-Bold", 110)
+            canvas.setFillColor(colors.Color(0.72, 0.53, 0.18, alpha=0.05))
+            canvas.translate(PAGE_W / 2, PAGE_H / 2 - 30 * mm)
+            canvas.rotate(32)
             canvas.drawCentredString(0, 0, "DRAFT")
             canvas.restoreState()
         canvas.saveState()
         canvas.setStrokeColor(LINE)
-        canvas.setLineWidth(0.6)
-        canvas.line(MARGIN, 14 * mm, PAGE_W - MARGIN, 14 * mm)
-        canvas.setFont("Helvetica", 7.2)
+        canvas.setLineWidth(0.5)
+        canvas.line(MARGIN, FOOTER_Y + 4 * mm, PAGE_W - MARGIN, FOOTER_Y + 4 * mm)
+        canvas.setFont("Helvetica", 6.8)
         canvas.setFillColor(FAINT)
-        canvas.drawString(MARGIN, 10 * mm, f"Slip gaji {line.user.name} - {plabel} - dicetak {printed}")
-        canvas.drawRightString(PAGE_W - MARGIN, 10 * mm, f"Halaman {canvas.getPageNumber()}")
+        canvas.drawString(MARGIN, FOOTER_Y, f"{madrasah_name}  ·  Slip gaji {line.user.name}  ·  {plabel}")
+        canvas.drawRightString(PAGE_W - MARGIN, FOOTER_Y, f"Halaman {canvas.getPageNumber()}")
         canvas.restoreState()
 
     def on_first(canvas, _doc) -> None:
         canvas.saveState()
-        top = PAGE_H - BAND_H
+        # Kop: satu blok biru tinta penuh + garis kuningan di bawahnya.
+        top = PAGE_H - HEADER_H
         canvas.setFillColor(INK)
-        canvas.rect(0, top, PAGE_W, BAND_H, stroke=0, fill=1)
-        # tekstur ubin khatam
-        p = canvas.beginPath()
-        p.rect(0, top, PAGE_W, BAND_H)
-        canvas.clipPath(p, stroke=0, fill=0)
-        canvas.setStrokeColor(colors.Color(1, 1, 1, alpha=0.05))
-        canvas.setLineWidth(0.6)
-        step = 16 * mm
-        y = top + step / 2
-        while y < PAGE_H + step:
-            x = step / 2
-            while x < PAGE_W + step:
-                _khatam(canvas, x, y, 6.2 * mm)
-                x += step
-            y += step
-        canvas.restoreState()
-
-        canvas.saveState()
+        canvas.rect(0, top, PAGE_W, HEADER_H, stroke=0, fill=1)
         canvas.setFillColor(BRASS)
-        canvas.rect(0, top, PAGE_W, 1.1 * mm, stroke=0, fill=1)
-        # merek: bintang kuningan + nama madrasah
-        canvas.setStrokeColor(BRASS_300)
-        canvas.setLineWidth(1.3)
-        mid = top + BAND_H / 2 + 1 * mm
-        _khatam(canvas, MARGIN + 4.2 * mm, mid, 6 * mm)
-        tx = MARGIN + 12 * mm
-        canvas.setFillColor(BRASS_300)
-        t = canvas.beginText(tx, mid + 5.2 * mm)
-        t.setFont("Helvetica-Bold", 8)
-        t.setCharSpace(1.6)
-        t.textOut("SLIP GAJI GURU")
-        canvas.drawText(t)
-        canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 17)
-        canvas.drawString(tx, mid - 2.2 * mm, madrasah_name)
-        canvas.setFont("Helvetica", 8.5)
-        canvas.setFillColor(colors.HexColor("#b9c5db"))
-        canvas.drawString(tx, mid - 7.6 * mm, "Rekap honor mengajar berdasarkan absensi")
-        # periode + status di kanan
+        canvas.rect(0, top - 0.8 * mm, PAGE_W, 0.8 * mm, stroke=0, fill=1)
+        # Dua baris, baseline kiri dan kanan sejajar, ditengahkan di dalam kop.
+        b1 = top + HEADER_H / 2 + 1.2 * mm   # baris judul
+        b2 = b1 - 5.6 * mm                   # baris keterangan
         right = PAGE_W - MARGIN
-        canvas.setFont("Helvetica-Bold", 7)
-        canvas.setFillColor(colors.HexColor("#b9c5db"))
-        t = canvas.beginText()
-        t.setFont("Helvetica-Bold", 7)
-        t.setCharSpace(1.2)
-        lbl = "PERIODE"
-        t.setTextOrigin(right - canvas.stringWidth(lbl, "Helvetica-Bold", 7) - 1.2 * (len(lbl) - 1), mid + 5.2 * mm)
-        t.textOut(lbl)
-        canvas.drawText(t)
-        canvas.setFont("Helvetica-Bold", 14)
+        canvas.setStrokeColor(BRASS_300)
+        canvas.setLineWidth(1.2)
+        _khatam(canvas, MARGIN + 4.6 * mm, (b1 + b2) / 2 + 1.2 * mm, 7.2 * mm)
+        tx = MARGIN + 13 * mm
         canvas.setFillColor(colors.white)
-        canvas.drawRightString(right, mid - 1.6 * mm, plabel)
-        _pill(canvas, right, mid - 9.2 * mm, label, OK if final else WARN, OK_SOFT if final else WARN_SOFT)
+        canvas.setFont("Helvetica-Bold", 15)
+        canvas.drawString(tx, b1, madrasah_name)
+        canvas.setFillColor(colors.HexColor("#b9c5db"))
+        canvas.setFont("Helvetica", 8.4)
+        canvas.drawString(tx, b2, "Rekap honor mengajar berdasarkan absensi")
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 15)
+        canvas.drawRightString(right, b1, plabel)
+        canvas.setFillColor(BRASS_300)
+        _spaced(canvas, right, b2, "SLIP GAJI GURU", "Helvetica-Bold", 7.2, 1.8, align="right")
         canvas.restoreState()
         draw_common(canvas)
 
     def on_later(canvas, _doc) -> None:
         canvas.saveState()
-        canvas.setFillColor(INK)
-        canvas.rect(0, PAGE_H - 4 * mm, PAGE_W, 4 * mm, stroke=0, fill=1)
-        canvas.setFillColor(BRASS)
-        canvas.rect(0, PAGE_H - 4.6 * mm, PAGE_W, 0.6 * mm, stroke=0, fill=1)
+        y = PAGE_H - 13 * mm
         canvas.setFont("Helvetica-Bold", 8.5)
         canvas.setFillColor(INK)
-        canvas.drawString(MARGIN, PAGE_H - 11 * mm, madrasah_name)
+        canvas.drawString(MARGIN, y, madrasah_name)
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(MUTED)
-        canvas.drawRightString(PAGE_W - MARGIN, PAGE_H - 11 * mm, f"Slip gaji {line.user.name} - {plabel} - {label}")
+        canvas.drawRightString(PAGE_W - MARGIN, y, f"Slip gaji {line.user.name}  ·  {plabel}  ·  {label}")
+        canvas.setStrokeColor(LINE)
+        canvas.setLineWidth(0.5)
+        canvas.line(MARGIN, y - 3.5 * mm, PAGE_W - MARGIN, y - 3.5 * mm)
         canvas.restoreState()
         draw_common(canvas)
 
+    bottom = FOOTER_Y + 10 * mm
     doc = BaseDocTemplate(
-        buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=20 * mm,
+        buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=bottom,
         title=f"Slip Gaji {line.user.name} {plabel}", author=madrasah_name, subject="Slip Gaji Guru",
     )
-    first_frame = Frame(MARGIN, 20 * mm, CONTENT_W, PAGE_H - BAND_H - 8 * mm - 20 * mm, id="first",
+    first_top = PAGE_H - HEADER_H - 9 * mm
+    later_top = PAGE_H - 22 * mm
+    first_frame = Frame(MARGIN, bottom, CONTENT_W, first_top - bottom, id="first",
                         leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    later_frame = Frame(MARGIN, 20 * mm, CONTENT_W, PAGE_H - 16 * mm - 20 * mm, id="later",
+    later_frame = Frame(MARGIN, bottom, CONTENT_W, later_top - bottom, id="later",
                         leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([
         PageTemplate(id="First", frames=[first_frame], onPage=on_first, autoNextPageTemplate="Later"),
         PageTemplate(id="Later", frames=[later_frame], onPage=on_later),
     ])
 
-    # ---------- Kartu identitas ----------
-    def field(lbl: str, val: str, sub: str = "") -> list:
-        out = [Paragraph(lbl.upper(), st["label"]), Spacer(1, 1.5), Paragraph(val, st["value"])]
-        if sub:
-            out.append(Paragraph(sub, st["value_sub"]))
-        return out
+    def flat(t: Table, extra: list | None = None) -> Table:
+        t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                               ("VALIGN", (0, 0), (-1, -1), "TOP")] + (extra or [])))
+        return t
 
+    # ---------- Identitas: penerima di kiri, rincian dokumen di kanan ----------
     if line.missing_rate:
-        rate_txt, rate_sub = "Belum diatur", "hubungi admin"
+        rate_cell = Paragraph("Belum diatur", st["kv_warn"])
     elif line.current_rate is not None:
-        rate_txt, rate_sub = format_rupiah(line.current_rate), "per pertemuan"
+        rate_cell = Paragraph(f"{format_rupiah(line.current_rate)}<font color='#8a95a8' face='Helvetica'>"
+                              f" / pertemuan</font>", st["kv_r"])
     else:
-        rate_txt, rate_sub = "-", ""
-    status_sub = (f"difinalisasi {format_datetime_id(line.finalized_at)}" if final and line.finalized_at
-                  else ("terkunci" if final else "bisa berubah"))
-    cw = CONTENT_W / 4
-    ident = Table([[
-        field("Nama guru", _esc(line.user.name), f"@{_esc(line.user.username)} - ID {line.user.user_id[:8]}"),
-        field("Periode", plabel, f"dicetak {printed}"),
-        field("Tarif saat ini", rate_txt, rate_sub),
-        field("Status slip", label, status_sub),
-    ]], colWidths=[cw * 1.35, cw * 0.95, cw * 0.85, cw * 0.85])
-    ident.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), SURFACE_2), ("BOX", (0, 0), (-1, -1), 0.6, LINE),
-        ("LINEBEFORE", (1, 0), (-1, 0), 0.6, LINE), ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 9), ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("ROUNDEDCORNERS", [6, 6, 6, 6]),
+        rate_cell = Paragraph("-", st["kv_r"])
+    pill = (Pill(label, OK, OK_SOFT, colors.HexColor("#bfe6dd")) if final
+            else Pill(label, WARN, WARN_SOFT, colors.HexColor("#f0d6a6")))
+    kv_rows = [
+        [Paragraph("Dicetak", st["kv_l"]), Paragraph(printed, st["kv_r"])],
+        [Paragraph("Tarif saat ini", st["kv_l"]), rate_cell],
+    ]
+    if final and line.finalized_at:
+        kv_rows.append([Paragraph("Difinalisasi", st["kv_l"]),
+                        Paragraph(format_datetime_id(line.finalized_at), st["kv_r"])])
+    kv_rows.append([Paragraph("Status", st["kv_l"]), pill])
+    right_w = CONTENT_W * 0.42
+    kv = Table(kv_rows, colWidths=[right_w * 0.42, right_w * 0.58])
+    kv.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.4, LINE), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
     ]))
-    story: list = [ident, Spacer(1, 7 * mm)]
+    who = [Paragraph("DIBERIKAN KEPADA", st["eyebrow"]), Spacer(1, 3),
+           Paragraph(_esc(line.user.name), st["name"]), Spacer(1, 2.5),
+           Paragraph(f"@{_esc(line.user.username)}  ·  ID {line.user.user_id[:8]}", st["name_sub"])]
+    gap = CONTENT_W * 0.08
+    ident = flat(Table([[who, "", kv]], colWidths=[CONTENT_W - right_w - gap, gap, right_w]))
+    story: list = [ident, Spacer(1, 10 * mm)]
 
     # ---------- Rincian pertemuan ----------
-    head = Table([[Paragraph("Rincian pertemuan", st["h2"]),
-                   Paragraph(f"{line.meetings} pertemuan", ParagraphStyle("cnt", parent=st["cell_muted"],
-                                                                         alignment=TA_RIGHT))]],
-                 colWidths=[CONTENT_W * 0.6, CONTENT_W * 0.4])
-    head.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                              ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("VALIGN", (0, 0), (-1, -1), "BOTTOM")]))
-    story.append(head)
+    head = flat(Table([[Paragraph("Rincian pertemuan", st["h2"]),
+                        Paragraph(f"{line.meetings} pertemuan", ParagraphStyle(
+                            "cnt", parent=st["kv_l"], alignment=TA_RIGHT))]],
+                      colWidths=[CONTENT_W * 0.6, CONTENT_W * 0.4]),
+                [("VALIGN", (0, 0), (-1, -1), "BOTTOM")])
+    story += [head, Spacer(1, 3 * mm)]
 
-    header = ["No", "Tanggal", "Sesi", "Kelas", "Mata Pelajaran", "Status", "Tarif"]
+    header = [Paragraph(h.upper(), st["th"]) for h in ["No", "Tanggal", "Sesi", "Kelas", "Mata pelajaran", "Status"]]
+    header.append(Paragraph("TARIF", st["thr"]))
     rows: list[list] = [header]
     for i, a in enumerate(line.rows, start=1):
         status = (Paragraph(f"Terlambat {a.late_min} mnt", st["warn"]) if a.status == "late"
                   else Paragraph("Tepat waktu", st["ok"]))
         rows.append([
-            Paragraph(str(i), st["cell_muted"]), Paragraph(format_date_id(a.date, with_day=True), st["cell"]),
+            Paragraph(f"{i:02d}", st["cell_muted"]), Paragraph(format_date_id(a.date, with_day=True), st["cell"]),
             Paragraph(_esc(session_names.get(a.code, a.code)), st["cell"]),
             Paragraph(_esc(a.kelas), st["cell"]), Paragraph(_esc(a.mapel), st["cell"]), status,
             Paragraph(format_rupiah(a.rate_snapshot), st["cellr"]),
@@ -268,22 +289,22 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
     empty = len(rows) == 1
     if empty:
         rows.append(["", Paragraph("Tidak ada pertemuan pada periode ini.", st["cell_muted"]), "", "", "", "", ""])
-    detail = Table(rows, colWidths=[9 * mm, 41 * mm, 15 * mm, 20 * mm, 29 * mm, 32 * mm, None], repeatRows=1)
+    detail = Table(rows, colWidths=[10 * mm, 42 * mm, 16 * mm, 21 * mm, 29 * mm, 30 * mm, None], repeatRows=1)
     ts = [
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, 0), 7.2),
-        ("TEXTCOLOR", (0, 0), (-1, 0), MUTED), ("BACKGROUND", (0, 0), (-1, 0), LAPIS_50),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.8, LINE_STRONG), ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
+        ("LINEABOVE", (0, 0), (-1, 0), 0.9, INK), ("LINEBELOW", (0, 0), (-1, 0), 0.5, LINE_STRONG),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, 0), 6), ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 5), ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 1), (-1, -1), 7), ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (0, -1), 0), ("RIGHTPADDING", (-1, 0), (-1, -1), 0),
     ]
     if empty:
-        ts += [("SPAN", (1, 1), (-1, 1)), ("TOPPADDING", (0, 1), (-1, 1), 12), ("BOTTOMPADDING", (0, 1), (-1, 1), 12)]
+        ts += [("SPAN", (1, 1), (-1, 1)), ("TOPPADDING", (0, 1), (-1, 1), 14), ("BOTTOMPADDING", (0, 1), (-1, 1), 14)]
     detail.setStyle(TableStyle(ts))
-    story += [detail, Spacer(1, 7 * mm)]
+    story += [detail, Spacer(1, 9 * mm)]
 
-    # ---------- Ringkasan + Take Home Pay ----------
+    # ---------- Catatan (kiri) + ringkasan & Take Home Pay (kanan) ----------
     summary: list[list] = [[Paragraph("Total pertemuan", st["sum_l"]),
                             Paragraph(f"{line.meetings} pertemuan", st["sum_r"])]]
     if len(line.rate_groups) > 1:
@@ -293,40 +314,31 @@ def build_slip_pdf(line: PayrollLine, madrasah_name: str, session_names: dict[st
     elif line.rate_groups:
         summary.append([Paragraph("Tarif per pertemuan", st["sum_l"]),
                         Paragraph(format_rupiah(line.rate_groups[0].rate), st["sum_r"])])
-    left_w = CONTENT_W * 0.5
-    sm = Table(summary, colWidths=[left_w * 0.55, left_w * 0.45 - 8 * mm])
+    sum_w = CONTENT_W * 0.48
+    sm = Table(summary, colWidths=[sum_w * 0.55, sum_w * 0.45])
     sm.setStyle(TableStyle([
-        ("LINEBELOW", (0, 0), (-1, -2), 0.4, LINE), ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, LINE), ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    thp = Table([[Paragraph("Total / Take Home Pay", st["thp_label"])],
-                 [Paragraph(format_rupiah(line.take_home), st["thp_value"])],
-                 [Paragraph(f"{line.meetings} pertemuan - {plabel}", st["thp_sub"])]],
-                colWidths=[CONTENT_W * 0.5])
+    thp = Table([[[Paragraph("TAKE HOME PAY", st["thp_label"]), Spacer(1, 2),
+                   Paragraph(f"{line.meetings} pertemuan", st["thp_sub"])],
+                  Paragraph(format_rupiah(line.take_home), st["thp_value"])]],
+                colWidths=[sum_w * 0.4, sum_w * 0.6])
     thp.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), INK), ("ROUNDEDCORNERS", [8, 8, 8, 8]),
-        ("LINEBEFORE", (0, 0), (0, -1), 3, BRASS_300),
-        ("LEFTPADDING", (0, 0), (-1, -1), 14), ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-        ("TOPPADDING", (0, 0), (-1, 0), 12), ("TOPPADDING", (0, 1), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, -1), (-1, -1), 12),
+        ("BACKGROUND", (0, 0), (-1, -1), INK), ("ROUNDEDCORNERS", [6, 6, 6, 6]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 11), ("BOTTOMPADDING", (0, 0), (-1, -1), 11),
     ]))
-    block = Table([[sm, thp]], colWidths=[left_w, CONTENT_W * 0.5])
-    block.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                               ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0),
-                               ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
 
     note_txt = ("Gaji dihitung dari jumlah pertemuan × tarif yang berlaku saat absen. "
                 + ("Slip ini FINAL dan sudah dikunci admin." if final
                    else "Slip ini masih DRAFT dan bisa berubah sampai periode difinalisasi admin."))
-    note = Table([[Paragraph(note_txt, st["note"])]], colWidths=[CONTENT_W])
-    note.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), OK_SOFT if final else WARN_SOFT),
-        ("LINEBEFORE", (0, 0), (0, -1), 2.5, OK if final else BRASS),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
-    story.append(KeepTogether([block, Spacer(1, 6 * mm), note]))
+    note = [Paragraph("CATATAN", st["eyebrow"]), Spacer(1, 3), Paragraph(note_txt, st["note"])]
+    note_w = CONTENT_W - sum_w - gap
+    block = flat(Table([[note, "", [sm, Spacer(1, 4 * mm), thp]]], colWidths=[note_w, gap, sum_w]))
+    story.append(KeepTogether([block]))
     doc.build(story)
     return buf.getvalue()
 

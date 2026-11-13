@@ -39,7 +39,7 @@ def test_slip_pdf_contains_name_and_total(svc, clock, admin, repo):
     assert "Ustadzah Fatimah Az-Zahra" in text
     assert "SLIP GAJI GURU" in text and "November 2026" in text and "MDA Test" in text
     assert "Rp 225.000" in text  # 3 × 75.000
-    assert "Total / Take Home Pay" in text
+    assert "TAKE HOME PAY" in text
     assert "Terlambat 10 mnt" in text
     assert "DRAFT" in text
     assert pages == 1
@@ -79,7 +79,7 @@ def test_slip_multi_page_repeats_header(repo):
     text, pages = pdf_text(build_slip_pdf(line, "MDA", NAMES, PRINTED))
     assert pages >= 2
     # header tabel berulang di setiap halaman yang memuat tabel (ringkasan boleh pindah ke halaman sendiri)
-    assert text.count("Mata Pelajaran") >= 2
+    assert text.count("MATA PELAJARAN") >= 2
     assert "Rp 600.000" in text
 
 
